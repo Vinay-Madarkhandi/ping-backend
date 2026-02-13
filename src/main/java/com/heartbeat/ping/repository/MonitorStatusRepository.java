@@ -7,5 +7,4 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface MonitorStatusRepository extends JpaRepository<MonitorStatus, UUID> {
-    Optional<MonitorStatus> findByMonitorId(UUID uuid);
 }

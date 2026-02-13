@@ -13,9 +13,8 @@ import java.util.UUID;
 
 @Repository
 public interface MonitorRepository extends JpaRepository<Monitor, UUID> {
-    List<Monitor> findByIsActiveTrue();
 
-    List<Monitor> findByUserId(UUID userId);
+    boolean existsByIdAndUser_Id(UUID monitorId, UUID userId);
 
     @Query("select m from Monitor m where m.isActive=true and m.nextCheckAt<=:now")
     List<Monitor> findDueMonitors(@Param("now")LocalDateTime now);
