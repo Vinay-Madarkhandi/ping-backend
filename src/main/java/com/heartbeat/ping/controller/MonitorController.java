@@ -4,7 +4,10 @@ import com.heartbeat.ping.dto.analytics.MonitorLogResponseDto;
 import com.heartbeat.ping.dto.analytics.MonitorStatusResponse;
 import com.heartbeat.ping.dto.monitor.CreateMonitorRequestDto;
 import com.heartbeat.ping.dto.monitor.CreateMonitorResponseDto;
+import com.heartbeat.ping.dto.monitor.MonitorListResponseDto;
+import com.heartbeat.ping.dto.monitor.UpdateMonitorRequest;
 import com.heartbeat.ping.modles.MonitorLogs;
+import com.heartbeat.ping.modles.User;
 import com.heartbeat.ping.repository.UserRepository;
 import com.heartbeat.ping.service.MonitorAnalyticService;
 import com.heartbeat.ping.service.MonitorService;
@@ -17,6 +20,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -38,6 +42,47 @@ public class MonitorController {
         CreateMonitorResponseDto responseDto = monitorService.monitorUrl(createMonitorRequestDto);
 
         return new ResponseEntity<>(responseDto, HttpStatus.CREATED);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<MonitorListResponseDto>> getAllMonitors(Authentication authentication) {
+        String email = authentication.getName();
+        UUID userId = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("User not found"))
+                    .getId();
+    
+        List<MonitorListResponseDto> monitors = monitorService.getAllMonitorsByUserId(userId);
+    
+        return new ResponseEntity<>(monitors,HttpStatus.OK);
+    }
+
+    @DeleteMapping("/{monitorId}")
+    public ResponseEntity<Void> deleteMonitor(
+            @PathVariable UUID monitorId,
+            Authentication authentication
+    ) {
+        String email = authentication.getName();
+        UUID userId = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        monitorService.deleteMonitor(monitorId, userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{monitorId}/toggle")
+    public ResponseEntity<Void> updateMonitor(
+            @PathVariable UUID monitorId,
+            @RequestBody UpdateMonitorRequest updateRequest,
+            Authentication authentication
+    ) {
+        String email = authentication.getName();
+        UUID userId = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        monitorService.updateMonitor(monitorId, updateRequest, userId);
+        return ResponseEntity.accepted().build();
     }
 
     @GetMapping("/{monitorId}/logs")
