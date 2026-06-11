@@ -6,18 +6,13 @@ import com.heartbeat.ping.dto.auth.UserSignUpRequestDto;
 import com.heartbeat.ping.dto.auth.UserSignUpResponseDto;
 import com.heartbeat.ping.service.AuthService;
 import com.heartbeat.ping.service.JwtService;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Arrays;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -70,10 +65,6 @@ public class AuthController {
 
     @GetMapping("/validate")
     public ResponseEntity<AuthResponseDto> validate(HttpServletRequest request){
-        Cookie[] str = request.getCookies();
-        for (Cookie cookie : str) {
-            System.out.println(cookie.getValue());
-        }
         return ResponseEntity.ok(new AuthResponseDto(true));
     }
 

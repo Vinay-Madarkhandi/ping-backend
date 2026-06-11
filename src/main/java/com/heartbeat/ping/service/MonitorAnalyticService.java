@@ -12,7 +12,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -58,12 +57,12 @@ public class MonitorAnalyticService {
                 .orElseThrow(() ->
                         new IllegalStateException("Monitor status not initialized yet")
                 );
+        boolean isUp = logsRepository.findTopByMonitor_IdOrderByCheckedAtDesc(monitorId)
+                .map(MonitorLogs::isUp)
+                .orElse(true);
 
         return MonitorStatusResponse.builder()
-                .isUp(status.getTotalChecks() == 0
-                        ? true
-                        : status.getLastDowntimeAt() == null
-                        || status.getLastDowntimeAt().isBefore(status.getUpdatedAt()))
+                .isUp(isUp)
                 .totalChecks(status.getTotalChecks())
                 .totalUp(status.getTotalUp())
                 .totalDown(status.getTotalDown())
@@ -73,4 +72,3 @@ public class MonitorAnalyticService {
                 .build();
     }
 }
-

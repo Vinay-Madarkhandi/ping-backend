@@ -19,6 +19,11 @@ public class AuthService {
     }
 
     public UserSignUpResponseDto userSignUp(UserSignUpRequestDto userSignUpRequest) {
+        userRepository.findByEmail(userSignUpRequest.getEmail())
+                .ifPresent(user -> {
+                    throw new IllegalArgumentException("Email already exists");
+                });
+
         User user = User.builder()
                 .userName(userSignUpRequest.getUsername())
                 .email(userSignUpRequest.getEmail())

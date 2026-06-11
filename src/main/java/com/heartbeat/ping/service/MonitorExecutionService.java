@@ -9,6 +9,7 @@ import com.heartbeat.ping.repository.MonitorRepository;
 import com.heartbeat.ping.repository.MonitorStatusRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -23,13 +24,11 @@ public class MonitorExecutionService {
     private final MonitorRepository monitorRepository;
     private final MonitorLogsRepository monitorLogsRepository;
     private final MonitorStatusRepository monitorStatusRepository;
-    private final RestTemplate restTemplate;
 
-    public MonitorExecutionService(MonitorRepository monitorRepository, MonitorLogsRepository monitorLogsRepository, MonitorStatusRepository monitorStatusRepository, RestTemplate restTemplate){
+    public MonitorExecutionService(MonitorRepository monitorRepository, MonitorLogsRepository monitorLogsRepository, MonitorStatusRepository monitorStatusRepository){
         this.monitorRepository = monitorRepository;
         this.monitorLogsRepository = monitorLogsRepository;
         this.monitorStatusRepository = monitorStatusRepository;
-        this.restTemplate = restTemplate;
     }
 
     @Transactional
@@ -42,6 +41,7 @@ public class MonitorExecutionService {
 
         try {
             ResponseEntity<String> response;
+            RestTemplate restTemplate = restTemplateFor(monitor.getTimeoutMilliseconds());
             MonitorMethod method =
                     monitor.getMonitorMethod() != null
                             ? monitor.getMonitorMethod()
@@ -111,19 +111,16 @@ public class MonitorExecutionService {
                         ChronoUnit.MILLIS
                 )
         );
-
-
-
-        monitor.setNextCheckAt(
-                LocalDateTime.now().plus(
-                        monitor.getIntervalMilliseconds(),
-                        ChronoUnit.MILLIS
-                )
-        );
         monitorStatusRepository.save(status);
         monitorRepository.save(monitor);
 
     }
 
+    private RestTemplate restTemplateFor(int timeoutMilliseconds) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(timeoutMilliseconds);
+        factory.setReadTimeout(timeoutMilliseconds);
+        return new RestTemplate(factory);
+    }
 
 }

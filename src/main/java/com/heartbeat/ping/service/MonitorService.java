@@ -6,10 +6,8 @@ import com.heartbeat.ping.dto.monitor.MonitorListResponseDto;
 import com.heartbeat.ping.dto.monitor.UpdateMonitorRequest;
 import com.heartbeat.ping.mapper.MonitorMapper;
 import com.heartbeat.ping.modles.Monitor;
-import com.heartbeat.ping.modles.MonitorMethod;
 import com.heartbeat.ping.modles.MonitorStatus;
 import com.heartbeat.ping.modles.User;
-import com.heartbeat.ping.repository.MonitorLogsRepository;
 import com.heartbeat.ping.repository.MonitorRepository;
 import com.heartbeat.ping.repository.MonitorStatusRepository;
 import com.heartbeat.ping.repository.UserRepository;
@@ -28,14 +26,12 @@ public class MonitorService {
     private final MonitorRepository monitorRepository;
     private final MonitorMapper monitorMapper;
     private final UserRepository userRepository;
-    private final MonitorLogsRepository monitorLogsRepository;
     private final MonitorStatusRepository monitorStatusRepository;
 
-    public MonitorService(MonitorRepository monitorRepository, MonitorMapper monitorMapper, UserRepository userRepository, MonitorLogsRepository monitorLogsRepository, MonitorStatusRepository monitorStatusRepository){
+    public MonitorService(MonitorRepository monitorRepository, MonitorMapper monitorMapper, UserRepository userRepository, MonitorStatusRepository monitorStatusRepository){
         this.monitorRepository = monitorRepository;
         this.monitorMapper = monitorMapper;
         this.userRepository = userRepository;
-        this.monitorLogsRepository = monitorLogsRepository;
         this.monitorStatusRepository = monitorStatusRepository;
     }
 
@@ -105,6 +101,16 @@ public class MonitorService {
         Monitor monitor = monitorMapper.toEntity(createMonitorRequestDto);
         monitor.setUser(user);
         Monitor response = monitorRepository.save(monitor);
+
+        MonitorStatus status = MonitorStatus.builder()
+                .monitor(response)
+                .totalChecks(0)
+                .totalUp(0)
+                .totalDown(0)
+                .uptimePercentage(100.0)
+                .updatedAt(LocalDateTime.now())
+                .build();
+        monitorStatusRepository.save(status);
 
         return monitorMapper.toResponse(response);
     }

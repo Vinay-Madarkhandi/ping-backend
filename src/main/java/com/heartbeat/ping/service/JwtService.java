@@ -24,7 +24,7 @@ public class JwtService {
     public String generateToken(Map<String, Object> payload, String email) {
             return Jwts.builder()
                     .addClaims(payload)
-                    .setExpiration(new Date(System.currentTimeMillis() + expiry*100))
+                    .setExpiration(new Date(System.currentTimeMillis() + expiry * 1000L))
                     .setIssuedAt(new Date())
                     .setSubject(email)
                     .signWith(getSignKey(), SignatureAlgorithm.HS256)
@@ -33,7 +33,7 @@ public class JwtService {
 
     public String createToken(String email){
         return Jwts.builder()
-                .setExpiration(new Date(System.currentTimeMillis() + expiry*100L))
+                .setExpiration(new Date(System.currentTimeMillis() + expiry * 1000L))
                 .setIssuedAt(new Date())
                 .setSubject(email)
                 .signWith(getSignKey(), SignatureAlgorithm.HS256)
@@ -76,7 +76,7 @@ public class JwtService {
 
     public Boolean isValid(String token){
         final String subjectFetched = extractEmail(token);
-        return !isTokenExpired(token) && subjectFetched.equals(token);
+        return subjectFetched != null && !isTokenExpired(token);
     }
 
     public Boolean validateToken(String token, String email) {

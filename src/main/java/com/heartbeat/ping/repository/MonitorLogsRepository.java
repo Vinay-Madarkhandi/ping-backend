@@ -23,7 +23,7 @@ public interface MonitorLogsRepository extends JpaRepository<MonitorLogs, UUID> 
             LocalDateTime to
     );
 
-    Optional<MonitorLogs> findTopByMonitor_IdOrderByCheckedAt(UUID monitorId);
+    Optional<MonitorLogs> findTopByMonitor_IdOrderByCheckedAtDesc(UUID monitorId);
 
     Page<MonitorLogs> findByMonitorIdOrderByCheckedAtDesc(
             UUID monitorId,
