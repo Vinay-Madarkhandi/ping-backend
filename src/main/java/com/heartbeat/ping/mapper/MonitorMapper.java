@@ -6,7 +6,7 @@ import com.heartbeat.ping.modles.Monitor;
 import com.heartbeat.ping.modles.MonitorMethod;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Locale;
 
 @Component
@@ -27,7 +27,11 @@ public class MonitorMapper {
                 .timeoutMilliseconds(monitorRequestDto.getTimeoutMilliseconds())
                 .isActive(true)
                 .monitorMethod(parseMethod(monitorRequestDto.getMonitorMethod()))
-                .nextCheckAt(LocalDateTime.now())
+                .expectedStatusCode(monitorRequestDto.getExpectedStatusCode())
+                .keyword(monitorRequestDto.getKeyword())
+                .followRedirects(monitorRequestDto.getFollowRedirects() == null || monitorRequestDto.getFollowRedirects())
+                .customHeaders(monitorRequestDto.getCustomHeaders())
+                .nextCheckAt(Instant.now())
                 .build();
     }
 

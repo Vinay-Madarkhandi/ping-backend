@@ -1,0 +1,18 @@
+# Build output & local caches (rebuilt inside the image)
+build/
+.gradle/
+out/
+
+# VCS / IDE
+.git/
+.gitignore
+.idea/
+*.iml
+.vscode/
+
+# Secrets & local env — never bake into the image
+.env
+
+# Docs (not needed at runtime)
+docs/
+*.md

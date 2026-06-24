@@ -1,10 +1,14 @@
 package com.heartbeat.ping.modles;
 
+import com.heartbeat.ping.modles.converter.JsonStringMapConverter;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -28,11 +32,45 @@ public class Monitor extends BaseModel{
     @Builder.Default
     private boolean isActive = true;
 
+    /** When true the monitor is administratively paused and skipped by the scheduler. */
+    @Builder.Default
+    private boolean paused = false;
+
+    /** Set when the monitor is archived (soft delete); such monitors are never claimed. */
+    @JdbcTypeCode(SqlTypes.TIMESTAMP)
+    private Instant deletedAt;
+
+    /**
+     * Next time this monitor is due. Stored as a UTC instant in a plain TIMESTAMP column
+     * (via {@link JdbcTypeCode}) so due-time comparisons are timezone-independent across instances.
+     * While a check is running this also acts as the lease — see {@code MonitorClaimService}.
+     */
     @Column(nullable = false)
-    private LocalDateTime nextCheckAt;
+    @JdbcTypeCode(SqlTypes.TIMESTAMP)
+    private Instant nextCheckAt;
 
     @Enumerated(value = EnumType.STRING)
     private MonitorMethod monitorMethod;
+
+    /** Optimistic-lock guard so a leased monitor cannot be double-executed. */
+    @Version
+    @Builder.Default
+    private long version = 0;
+
+    // ---- Check configuration ----
+
+    /** Expected HTTP status; when null any 2xx counts as up. */
+    private Integer expectedStatusCode;
+
+    /** Optional substring that must appear in the response body for the check to pass. */
+    private String keyword;
+
+    @Builder.Default
+    private boolean followRedirects = true;
+
+    @Convert(converter = JsonStringMapConverter.class)
+    @Column(name = "custom_headers", columnDefinition = "text")
+    private Map<String, String> customHeaders;
 
     @ManyToOne(fetch = FetchType.LAZY)
     private User user;

@@ -1,10 +1,12 @@
 package com.heartbeat.ping.controller;
 
 import com.heartbeat.ping.dto.Error.ErrorResponse;
+import com.heartbeat.ping.service.security.SsrfValidationException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -19,6 +21,26 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(SsrfValidationException.class)
+    public ResponseEntity<ErrorResponse> handleSsrf(
+            SsrfValidationException ex,
+            HttpServletRequest request
+    ) {
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidation(
+            MethodArgumentNotValidException ex,
+            HttpServletRequest request
+    ) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .map(e -> e.getField() + " " + e.getDefaultMessage())
+                .findFirst()
+                .orElse("Validation failed");
+        return build(HttpStatus.BAD_REQUEST, message, request);
     }
 
     @ExceptionHandler(AccessDeniedException.class)

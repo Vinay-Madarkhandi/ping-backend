@@ -33,4 +33,26 @@ public class MonitorStatus {
     private LocalDateTime lastDowntimeAt;
 
     private LocalDateTime updatedAt;
+
+    // ---- Alert-engine state machine ----
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "current_state", nullable = false, length = 16)
+    @Builder.Default
+    private MonitorState currentState = MonitorState.UNKNOWN;
+
+    @Column(name = "consecutive_failures", nullable = false)
+    @Builder.Default
+    private int consecutiveFailures = 0;
+
+    /** Consecutive successes while DOWN, used for the configurable recovery threshold. */
+    @Column(name = "consecutive_successes", nullable = false)
+    @Builder.Default
+    private int consecutiveSuccesses = 0;
+
+    /** Set when the monitor transitions to DOWN; cleared on recovery. */
+    private LocalDateTime downSince;
+
+    /** Last time any alert was dispatched, used to enforce the cooldown window. */
+    private LocalDateTime lastAlertSentAt;
 }

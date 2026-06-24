@@ -4,6 +4,8 @@ import com.heartbeat.ping.modles.MonitorLogs;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -30,4 +32,22 @@ public interface MonitorLogsRepository extends JpaRepository<MonitorLogs, UUID> 
             Pageable pageable
     );
 
+    /** Ordered check times in a window, for detecting coverage gaps (scheduler outages / missing data). */
+    @Query("""
+            select l.checkedAt from MonitorLogs l
+            where l.monitor.id = :monitorId and l.checkedAt between :start and :end
+            order by l.checkedAt asc
+            """)
+    List<LocalDateTime> findCheckTimes(@Param("monitorId") UUID monitorId,
+                                       @Param("start") LocalDateTime start,
+                                       @Param("end") LocalDateTime end);
+
+    /** Bulk-deletes raw logs older than the cutoff (retention purge). */
+    @Modifying
+    @Query("delete from MonitorLogs l where l.checkedAt < :cutoff")
+    int deleteByCheckedAtBefore(@Param("cutoff") LocalDateTime cutoff);
+
+    /** Distinct monitor ids that have any log at or after the cutoff (for daily rollup). */
+    @Query("select distinct l.monitor.id from MonitorLogs l where l.checkedAt >= :from and l.checkedAt < :to")
+    List<UUID> findMonitorIdsWithLogsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

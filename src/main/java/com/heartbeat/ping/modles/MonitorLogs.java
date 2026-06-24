@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
-import java.util.Locale;
 import java.util.UUID;
 
 @Getter
@@ -30,6 +29,10 @@ public class MonitorLogs {
     private int responseTimeInMilli;
 
     private boolean isUp;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 16)
+    private ProbeOutcome outcome;
 
     private String errorMessage;
 

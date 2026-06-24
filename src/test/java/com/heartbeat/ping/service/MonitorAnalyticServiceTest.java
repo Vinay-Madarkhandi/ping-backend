@@ -1,7 +1,9 @@
 package com.heartbeat.ping.service;
 
 import com.heartbeat.ping.dto.analytics.MonitorStatusResponse;
+import com.heartbeat.ping.modles.Monitor;
 import com.heartbeat.ping.modles.MonitorLogs;
+import com.heartbeat.ping.modles.MonitorState;
 import com.heartbeat.ping.modles.MonitorStatus;
 import com.heartbeat.ping.repository.MonitorLogsRepository;
 import com.heartbeat.ping.repository.MonitorRepository;
@@ -16,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.when;
 
@@ -43,19 +46,17 @@ class MonitorAnalyticServiceTest {
                 .totalUp(0)
                 .totalDown(1)
                 .uptimePercentage(0.0)
+                .currentState(MonitorState.DOWN)
                 .updatedAt(LocalDateTime.now())
                 .build();
-        MonitorLogs latestLog = MonitorLogs.builder()
-                .isUp(false)
-                .checkedAt(LocalDateTime.now())
-                .build();
+        Monitor monitor = Monitor.builder().paused(false).build();
 
-        when(monitorRepository.existsByIdAndUser_Id(monitorId, userId)).thenReturn(true);
+        when(monitorRepository.findByIdAndUser_Id(monitorId, userId)).thenReturn(Optional.of(monitor));
         when(monitorStatusRepository.findById(monitorId)).thenReturn(Optional.of(status));
-        when(logsRepository.findTopByMonitor_IdOrderByCheckedAtDesc(monitorId)).thenReturn(Optional.of(latestLog));
 
         MonitorStatusResponse response = service.getMonitorStatus(monitorId, userId);
 
-        assertFalse(response.isUp());
+        assertFalse(response.isUp()); // currentState is DOWN
+        assertEquals("DOWN", response.getDisplayState());
     }
 }

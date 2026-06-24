@@ -1,12 +1,16 @@
 package com.heartbeat.ping.service;
 
 import com.heartbeat.ping.dto.analytics.MonitorStatusResponse;
+import com.heartbeat.ping.modles.Incident;
 import com.heartbeat.ping.modles.Monitor;
 import com.heartbeat.ping.modles.MonitorLogs;
+import com.heartbeat.ping.modles.MonitorState;
 import com.heartbeat.ping.modles.MonitorStatus;
 import com.heartbeat.ping.repository.MonitorLogsRepository;
 import com.heartbeat.ping.repository.MonitorRepository;
 import com.heartbeat.ping.repository.MonitorStatusRepository;
+import com.heartbeat.ping.service.incident.IncidentService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -15,16 +19,19 @@ import org.springframework.stereotype.Service;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class MonitorAnalyticService {
 
     private final MonitorRepository monitorRepository;
     private final MonitorLogsRepository logsRepository;
     private final MonitorStatusRepository monitorStatusRepository;
+    private final IncidentService incidentService;
 
-    public MonitorAnalyticService(MonitorRepository monitorRepository, MonitorLogsRepository logsRepository, MonitorStatusRepository monitorStatusRepository){
-        this.monitorRepository = monitorRepository;
-        this.logsRepository = logsRepository;
-        this.monitorStatusRepository = monitorStatusRepository;
+    public Page<Incident> getIncidents(UUID monitorId, UUID userId, Pageable pageable) {
+        if (!monitorRepository.existsByIdAndUser_Id(monitorId, userId)) {
+            throw new AccessDeniedException("Monitor not found for this user");
+        }
+        return incidentService.history(monitorId, pageable);
     }
 
     public Page<MonitorLogs> getMonitorLogs(
@@ -47,22 +54,23 @@ public class MonitorAnalyticService {
     }
 
     public MonitorStatusResponse getMonitorStatus(UUID monitorId, UUID userId) {
-        boolean ownsMonitor = monitorRepository.existsByIdAndUser_Id(monitorId, userId);
-
-        if (!ownsMonitor) {
-            throw new AccessDeniedException("Monitor not found for this user");
-        }
+        Monitor monitor = monitorRepository.findByIdAndUser_Id(monitorId, userId)
+                .orElseThrow(() -> new AccessDeniedException("Monitor not found for this user"));
 
         MonitorStatus status = monitorStatusRepository.findById(monitorId)
                 .orElseThrow(() ->
                         new IllegalStateException("Monitor status not initialized yet")
                 );
-        boolean isUp = logsRepository.findTopByMonitor_IdOrderByCheckedAtDesc(monitorId)
-                .map(MonitorLogs::isUp)
-                .orElse(true);
+        // Derive from the FSM state (not the last raw log) so an INCONCLUSIVE check never flips "up".
+        boolean isUp = status.getCurrentState() == MonitorState.UP;
+
+        String currentState = status.getCurrentState().name();
+        String displayState = monitor.isPaused() ? "PAUSED" : currentState;
 
         return MonitorStatusResponse.builder()
                 .isUp(isUp)
+                .currentState(currentState)
+                .displayState(displayState)
                 .totalChecks(status.getTotalChecks())
                 .totalUp(status.getTotalUp())
                 .totalDown(status.getTotalDown())

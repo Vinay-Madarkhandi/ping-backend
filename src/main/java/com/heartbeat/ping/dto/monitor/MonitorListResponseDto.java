@@ -3,7 +3,7 @@ package com.heartbeat.ping.dto.monitor;
 import com.heartbeat.ping.modles.MonitorMethod;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Builder
@@ -17,6 +17,6 @@ public class MonitorListResponseDto {
     private String url;
     private boolean active;
     private MonitorMethod method;
-    private LocalDateTime nextCheckAt;
+    private Instant nextCheckAt;
     private double uptimePercentage;
 }
