@@ -1,0 +1,43 @@
+# Alertmanager routing for ping.
+#
+# By default alerts are grouped and sent to a no-op receiver (visible in the Alertmanager UI at
+# http://localhost:9093 and on the Grafana "Alerting" view). Wire a real receiver — Slack, email,
+# PagerDuty — by filling in one of the commented blocks below and pointing the route at it.
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default
+  group_by: ["alertname", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # Page critical alerts faster than warnings.
+    - matchers:
+        - severity = "critical"
+      receiver: default
+      repeat_interval: 1h
+
+receivers:
+  - name: default
+    # No-op by default — alerts are still visible in the UI. Replace with a real integration:
+    #
+    # slack_configs:
+    #   - api_url: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+    #     channel: "#alerts"
+    #     send_resolved: true
+    #
+    # email_configs:
+    #   - to: "oncall@example.com"
+    #     from: "alertmanager@ping"
+    #     smarthost: "smtp.example.com:587"
+    #     auth_username: "..."
+    #     auth_password: "..."
+    #     send_resolved: true
+
+inhibit_rules:
+  # When the app is fully down, suppress the noisier component-level warnings it would trigger.
+  - source_matchers: [severity = "critical", alertname = "PingAppDown"]
+    target_matchers: [severity = "warning"]
+    equal: ["instance"]

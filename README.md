@@ -37,8 +37,10 @@ operational metrics for Prometheus.
 - Duration-based uptime calculation that excludes paused time and data gaps.
 - Raw log retention with daily rollups.
 - SSRF protection at monitor creation and at DNS resolution/connect time.
-- Prometheus metrics through Spring Actuator.
-- Docker Compose stack for PostgreSQL, app, and optional Prometheus.
+- Prometheus metrics through Spring Actuator, with provisioned Grafana dashboards and alert rules.
+- Correlated, human-readable logs (per-request `X-Request-Id` trace id) shipped to Loki for search.
+- Docker Compose stack for PostgreSQL, the app, and an optional full observability stack
+  (Prometheus + Grafana + Loki + Alloy + Alertmanager).
 
 ## Architecture
 
@@ -140,27 +142,27 @@ The API is available at:
 http://localhost:8080
 ```
 
-### Run with Prometheus
+### Run with the observability stack
 
-Prometheus is configured as an optional Compose profile:
+A full monitoring stack — **Prometheus + Grafana + Loki + Alloy + Alertmanager** — ships as an
+optional Compose profile:
 
 ```bash
 docker compose --profile observability up --build -d
 ```
 
-Open:
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Grafana | http://localhost:3000 | Dashboards + log search (login `admin` / `${GRAFANA_ADMIN_PASSWORD:-admin}`) |
+| Prometheus | http://localhost:9090 | Metrics + alert-rule evaluation |
+| Alertmanager | http://localhost:9093 | Alert routing |
+| Loki | http://localhost:3100 | Log store (queried via Grafana) |
 
-```text
-http://localhost:9090
-```
-
-Prometheus scrapes:
-
-```text
-http://app:8080/actuator/prometheus
-```
-
-Prometheus is configured, but Grafana is not currently part of `docker-compose.yml`.
+Grafana auto-loads the **"Ping — Overview"** dashboard (uptime, check rates/latency, scheduler lag,
+pool saturation, alerts/email outbox, JVM, DB pool, and a live application-log panel). Prometheus
+scrapes `http://app:8080/actuator/prometheus` and fires the rules in `docker/prometheus/alerts.yml`;
+Alloy tails container logs into Loki. See [docs/observability.md](docs/observability.md) for the full
+tour and the alert → action table.
 
 ### Run Locally Without Docker App Container
 
@@ -375,12 +377,28 @@ Archive is a soft delete. History is retained.
 
 ## Observability
 
+The app ships a complete, ready-to-run observability stack (see
+[docs/observability.md](docs/observability.md) for the full guide):
+
+- **Metrics** — Micrometer → Prometheus, visualized in a provisioned **Grafana** dashboard.
+- **Logs** — correlated, human-readable logs (per-request `X-Request-Id` trace id), shipped by
+  **Alloy** into **Loki** and searchable from the same Grafana.
+- **Alerts** — Prometheus rules (`docker/prometheus/alerts.yml`) routed through **Alertmanager**.
+
+Launch it all with `docker compose --profile observability up --build` (URLs in
+[Run with the observability stack](#run-with-the-observability-stack)).
+
 Actuator endpoints:
 
 ```text
-GET /actuator/health
-GET /actuator/info
-GET /actuator/prometheus
+GET  /actuator/health          # liveness/readiness (public)
+GET  /actuator/health/liveness
+GET  /actuator/health/readiness
+GET  /actuator/info            # build/app info (public)
+GET  /actuator/prometheus      # metrics scrape (public)
+GET  /actuator/metrics         # metric browser (authenticated)
+GET  /actuator/loggers         # view/change log levels at runtime (authenticated)
+POST /actuator/loggers/com.heartbeat.ping   # e.g. {"configuredLevel":"DEBUG"} — no restart needed
 ```
 
 Prometheus metrics include:
@@ -535,6 +553,7 @@ See [docs/known-limitations.md](docs/known-limitations.md) for details.
 
 - [architecture.md](architecture.md): detailed system design and invariants.
 - [docs/deployment-architecture.md](docs/deployment-architecture.md): production topology and scale path.
+- [docs/observability.md](docs/observability.md): metrics, logs, dashboards, and alerting stack.
 - [docs/runbook.md](docs/runbook.md): operational response guide.
 - [docs/uptime.md](docs/uptime.md): uptime formula and edge cases.
 - [docs/load-testing-plan.md](docs/load-testing-plan.md): capacity test plan.

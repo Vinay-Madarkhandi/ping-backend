@@ -1,14 +1,18 @@
-# One-command local stack: PostgreSQL + the ping backend (+ optional Prometheus).
+# One-command local stack: PostgreSQL + the ping backend (+ a full observability stack).
 # Values come from the .env file in this directory (copy .env.example -> .env first).
 #
 #   cp .env.example .env        # then paste your real MAIL_PASSWORD etc. into .env
 #   docker compose up --build   # build + run db + app
-#   docker compose --profile observability up --build   # also run Prometheus
+#   docker compose --profile observability up --build   # also run Prometheus/Grafana/Loki/Alloy/Alertmanager
 #
-# App:        http://localhost:8080
-# Health:     http://localhost:8080/actuator/health
-# Metrics:    http://localhost:8080/actuator/prometheus
-# Prometheus: http://localhost:9090   (only with the observability profile)
+# App:          http://localhost:8080
+# Health:       http://localhost:8080/actuator/health
+# Metrics:      http://localhost:8080/actuator/prometheus
+# --- observability profile only ---
+# Grafana:      http://localhost:3000   (dashboards + log search; login admin / ${GRAFANA_ADMIN_PASSWORD:-admin})
+# Prometheus:   http://localhost:9090
+# Alertmanager: http://localhost:9093
+# Loki:         http://localhost:3100   (queried via Grafana; no UI of its own)
 
 services:
   postgres:
@@ -51,8 +55,13 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       # --- Auth ---
       JWT_SECRET: ${JWT_SECRET}
+      # --- Observability: app log level (INFO default; DEBUG for troubleshooting) ---
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # --- Optional: allow monitoring private/localhost targets for local testing ---
       # MONITOR_SSRF_ALLOWPRIVATE: "true"
+    labels:
+      # Picked up by Grafana Alloy to label this container's logs in Loki.
+      logging: "promtail"
     ports:
       - "8080:8080"
     healthcheck:
@@ -62,7 +71,11 @@ services:
       retries: 10
       start_period: 60s
 
-  # Optional — only starts with:  docker compose --profile observability up
+  # ===========================================================================
+  #  Observability stack — only starts with:  docker compose --profile observability up
+  #  Prometheus (metrics) + Alertmanager (alerts) + Loki (logs) + Alloy (log shipping) + Grafana (UI)
+  # ===========================================================================
+
   prometheus:
     image: prom/prometheus:latest
     container_name: ping-prometheus
@@ -70,10 +83,82 @@ services:
     restart: unless-stopped
     depends_on:
       - app
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=15d"
     volumes:
       - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
     ports:
       - "9090:9090"
 
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: ping-alertmanager
+    profiles: ["observability"]
+    restart: unless-stopped
+    volumes:
+      - ./docker/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+
+  loki:
+    image: grafana/loki:latest
+    container_name: ping-loki
+    profiles: ["observability"]
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    volumes:
+      - ./docker/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+
+  alloy:
+    image: grafana/alloy:latest
+    container_name: ping-alloy
+    profiles: ["observability"]
+    restart: unless-stopped
+    depends_on:
+      - loki
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./docker/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # Read-only access to the Docker socket so Alloy can discover containers and tail their logs.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy/data
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ping-grafana
+    profiles: ["observability"]
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - loki
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Land directly on the provisioned dashboard.
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/ping-overview.json
+    volumes:
+      # Provider configs (datasources + dashboard provider) live under provisioning/...
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      # ...and the dashboard JSON is loaded from the path the provider points at.
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      # Host port is overridable (set GRAFANA_PORT in .env) in case 3000 is already taken locally.
+      - "${GRAFANA_PORT:-3000}:3000"
+
 volumes:
   postgres-data:
+  prometheus-data:
+  loki-data:
+  alloy-data:
+  grafana-data:

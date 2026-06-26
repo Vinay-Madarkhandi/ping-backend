@@ -1,0 +1,45 @@
+// Grafana Alloy — discovers Docker containers and ships their stdout/stderr logs to Loki.
+// Containers are labelled so the Grafana dashboard can filter to the ping app (compose_service="app").
+
+// Discover all containers from the Docker daemon (socket mounted read-only in compose).
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+}
+
+// Map Docker metadata onto Loki labels.
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	// docker-compose service name -> compose_service label (e.g. "app", "postgres").
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "compose_service"
+	}
+
+	// Friendly container name (strip the leading "/").
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+
+	// A static job label so everything from this stack groups together in Loki.
+	rule {
+		target_label = "job"
+		replacement  = "ping-stack"
+	}
+}
+
+// Tail the discovered containers' logs.
+loki.source.docker "containers" {
+	host       = "unix:///var/run/docker.sock"
+	targets    = discovery.relabel.containers.output
+	forward_to = [loki.write.default.receiver]
+}
+
+// Ship everything to Loki.
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}
