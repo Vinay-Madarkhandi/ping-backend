@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Production logging for ping.
+
+  Design goals:
+    - Human-readable, colorized console output in every environment (logs are tailed by Grafana
+      Alloy -> Loki as plain text, so structured JSON is not required).
+    - A per-request correlation id is surfaced via the [%X{traceId}] MDC slot, populated by
+      CorrelationIdFilter and echoed back to clients as the X-Request-Id header.
+    - Logging is wrapped in an AsyncAppender so a slow console never blocks the poller, the HTTP
+      worker pools or the email outbox worker.
+    - Levels are env-overridable: set LOG_LEVEL=DEBUG (or per-logger via /actuator/loggers at
+      runtime) without rebuilding.
+-->
+<configuration>
+
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="ping"/>
+
+    <!-- traceId is set per request by CorrelationIdFilter; "-" shown when absent (e.g. scheduler threads). -->
+    <property name="LOG_PATTERN"
+              value="%d{HH:mm:ss.SSS} %highlight(%-5level) [%cyan(%X{traceId:--})] %magenta([%thread]) %yellow(%logger{36}) - %msg%n"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Non-blocking: drops nothing until the 80%-full mark, never blocks publisher threads on flush. -->
+    <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>4096</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <includeCallerData>false</includeCallerData>
+        <appender-ref ref="CONSOLE"/>
+    </appender>
+
+    <!-- Application logs honour LOG_LEVEL (default INFO). -->
+    <logger name="com.heartbeat.ping" level="${LOG_LEVEL:-INFO}"/>
+
+    <!-- Quiet down framework noise so the signal stays readable in production. -->
+    <logger name="org.hibernate.SQL" level="OFF"/>
+    <logger name="org.hibernate.orm.jdbc.bind" level="OFF"/>
+    <logger name="org.springframework.web" level="INFO"/>
+    <logger name="org.springframework.security" level="INFO"/>
+    <logger name="org.apache.hc" level="WARN"/>
+    <logger name="org.flywaydb" level="INFO"/>
+    <logger name="com.zaxxer.hikari" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="ASYNC"/>
+    </root>
+
+</configuration>

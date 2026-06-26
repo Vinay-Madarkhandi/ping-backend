@@ -1,0 +1,85 @@
+# Prometheus alert rules for the ping backend.
+# Metric names follow Micrometer -> Prometheus renaming: dots become underscores, counters gain a
+# _total suffix, and the monitor.check.latency timer is exported as monitor_check_latency_seconds*.
+groups:
+  - name: ping-availability
+    rules:
+      - alert: PingAppDown
+        expr: up{job="ping"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ping backend is down"
+          description: "Prometheus cannot scrape {{ $labels.instance }} (/actuator/prometheus) for 1m."
+
+  - name: ping-scheduler
+    rules:
+      # Average scheduler lag (how far behind a claimed monitor ran). Sustained lag above the poll
+      # interval means the engine can't keep up — see docs/runbook.md.
+      - alert: SchedulerLagHigh
+        expr: |
+          rate(monitor_scheduler_lag_ms_sum[5m])
+            / clamp_min(rate(monitor_scheduler_lag_ms_count[5m]), 1) > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Monitor scheduler lag is high"
+          description: "Average scheduler lag > 10s over 5m ({{ $value | humanize }} ms). Scale instances or raise pool sizes."
+
+      # A bulkhead pool is rejecting checks — under-capacity for current fan-out.
+      - alert: CheckPoolRejecting
+        expr: increase(monitor_checks_rejected_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Health-check pool '{{ $labels.pool }}' is rejecting checks"
+          description: "{{ $value | humanize }} checks dropped in the last 5m. Raise monitor.executor.{{ $labels.pool }}.* or add instances."
+
+      # INCONCLUSIVE = our own infra couldn't complete the probe (HC5 pool, DNS, SSRF block).
+      - alert: InconclusiveRateHigh
+        expr: |
+          sum(rate(monitor_checks_total{result="inconclusive"}[10m]))
+            / clamp_min(sum(rate(monitor_checks_total[10m])), 0.001) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Inconclusive check rate > 10%"
+          description: "Our infra (not targets) is failing probes. Check HC5 pool, DNS, and SSRF blocks."
+
+  - name: ping-notifications
+    rules:
+      # Dead-lettered alert emails — the runbook flags that there was no automatic alert for this.
+      - alert: EmailDeadLettering
+        expr: increase(monitor_email_outbox_total{outcome="failed"}[15m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alert emails are dead-lettering"
+          description: "{{ $value | humanize }} email(s) moved to FAILED in 15m. Check SMTP creds/connectivity; inspect email_outbox."
+
+  - name: ping-resources
+    rules:
+      - alert: HikariPoolSaturated
+        expr: hikaricp_connections_pending > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool is saturated"
+          description: "Threads are waiting for a DB connection ({{ $value }} pending) for 5m. DB or pool is the bottleneck."
+
+      - alert: JvmHeapHigh
+        expr: |
+          sum by (instance) (jvm_memory_used_bytes{area="heap"})
+            / sum by (instance) (jvm_memory_max_bytes{area="heap"}) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "JVM heap usage > 90%"
+          description: "Heap has been above 90% for 10m on {{ $labels.instance }} — risk of GC thrash / OOM."

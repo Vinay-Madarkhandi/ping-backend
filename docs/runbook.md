@@ -10,10 +10,14 @@
 
 ## Health & dashboards
 
-- Liveness/readiness: `GET /actuator/health`.
-- Metrics: `GET /actuator/prometheus`. Build Grafana panels for: `monitor_scheduler_lag_ms` (p95),
-  `monitor_checks_total{result}` (incl. `inconclusive`), `monitor_checks_rejected{pool}`,
-  `monitor_check_latency`, `monitor_alerts`, `monitor_email_outbox{outcome}`, Hikari pool, JVM GC.
+- Liveness/readiness: `GET /actuator/health` (groups at `/actuator/health/{liveness,readiness}`).
+- Metrics: `GET /actuator/prometheus`.
+- Dashboards/alerts: run `docker compose --profile observability up` and open Grafana at
+  http://localhost:3000 — the provisioned **"Ping — Overview"** dashboard covers scheduler lag,
+  `monitor_checks_total{result}` (incl. `inconclusive`), `monitor_checks_rejected{pool}`, check
+  latency p95/p99, `monitor_alerts`, `monitor_email_outbox{outcome}`, Hikari pool and JVM/GC, plus a
+  live log panel. Prometheus alert rules are in `docker/prometheus/alerts.yml`. Full guide:
+  [observability.md](observability.md).
 
 ## Alerts → response
 
@@ -33,7 +37,8 @@
 **`monitor_email_outbox{outcome="failed"}` > 0 (dead-letters)**
 - Alert emails are not being delivered. Check SMTP creds/connectivity. Inspect `email_outbox` rows
   with `status='FAILED'` (`last_error`). Fix SMTP, then requeue (set `status='PENDING'`,
-  `attempts=0`, `next_attempt_at=now()`). ⚠️ There is no automatic dead-letter alert yet — monitor this.
+  `attempts=0`, `next_attempt_at=now()`). The `EmailDeadLettering` Prometheus alert fires when this
+  happens (`docker/prometheus/alerts.yml`); wire an Alertmanager receiver so it actually pages.
 
 **`email_outbox` PENDING backlog growing**
 - Worker not draining: confirm `monitor.scheduler.enabled=true` on at least one node; check the
