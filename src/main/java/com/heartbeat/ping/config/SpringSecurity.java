@@ -51,6 +51,9 @@ public class SpringSecurity {
                                 .requestMatchers("/api/v1/auth/signup/**").permitAll()
                                 .requestMatchers("/api/v1/auth/signin/**").permitAll()
                                 .requestMatchers("/api/v1/health").permitAll()
+                                .requestMatchers("/error").permitAll()
+                                // Razorpay calls this server-to-server; it is authenticated by HMAC, not JWT.
+                                .requestMatchers("/api/v1/webhooks/**").permitAll()
                                 // /actuator/health/** also covers the liveness/readiness probe groups.
                                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                                 .requestMatchers("/api/v1/auth/validate").authenticated()

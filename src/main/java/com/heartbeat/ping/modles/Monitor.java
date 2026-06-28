@@ -41,6 +41,14 @@ public class Monitor extends BaseModel{
     private Instant deletedAt;
 
     /**
+     * When true the owning user is over their monthly check quota, so the scheduler skips this
+     * monitor (see {@code MonitorRepository.claimDueMonitors}). Maintained by the quota
+     * enforcement job and cleared automatically at month rollover.
+     */
+    @Builder.Default
+    private boolean quotaBlocked = false;
+
+    /**
      * Next time this monitor is due. Stored as a UTC instant in a plain TIMESTAMP column
      * (via {@link JdbcTypeCode}) so due-time comparisons are timezone-independent across instances.
      * While a check is running this also acts as the lease — see {@code MonitorClaimService}.

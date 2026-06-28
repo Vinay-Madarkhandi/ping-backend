@@ -1,7 +1,9 @@
 package com.heartbeat.ping;
 
+import com.heartbeat.ping.config.properties.AdminProperties;
 import com.heartbeat.ping.config.properties.AlertProperties;
 import com.heartbeat.ping.config.properties.EmailProperties;
+import com.heartbeat.ping.config.properties.RazorpayProperties;
 import com.heartbeat.ping.config.properties.HttpClientProperties;
 import com.heartbeat.ping.config.properties.RetentionProperties;
 import com.heartbeat.ping.config.properties.SchedulerProperties;
@@ -23,7 +25,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         EmailProperties.class,
         RetentionProperties.class,
         SsrfProperties.class,
-        UptimeProperties.class
+        UptimeProperties.class,
+        AdminProperties.class,
+        RazorpayProperties.class
 })
 public class PingApplication {
 

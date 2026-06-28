@@ -5,8 +5,14 @@ import com.heartbeat.ping.modles.Incident;
 import com.heartbeat.ping.modles.Monitor;
 import com.heartbeat.ping.modles.MonitorState;
 import com.heartbeat.ping.modles.MonitorStatus;
+import com.heartbeat.ping.modles.Plan;
+import com.heartbeat.ping.modles.User;
+import com.heartbeat.ping.modles.UserAlertUsage;
+import com.heartbeat.ping.repository.UserAlertUsageRepository;
+import com.heartbeat.ping.service.PlanService;
 import com.heartbeat.ping.service.check.CheckResult;
 import com.heartbeat.ping.service.incident.IncidentService;
+import com.heartbeat.ping.service.metrics.MetricsService;
 import com.heartbeat.ping.service.notification.AlertType;
 import com.heartbeat.ping.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -14,9 +20,11 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Explicit state machine: {@code UNKNOWN/UP/SUSPECT/DOWN}. A monitor is declared DOWN only after
@@ -35,6 +43,9 @@ public class DefaultAlertEngine implements AlertEngine {
     private final AlertProperties alertProps;
     private final IncidentService incidentService;
     private final NotificationService notificationService;
+    private final PlanService planService;
+    private final UserAlertUsageRepository userAlertUsageRepository;
+    private final MetricsService metricsService;
 
     @Override
     public void process(Monitor monitor, MonitorStatus status, CheckResult result, Instant now) {
@@ -101,14 +112,48 @@ public class DefaultAlertEngine implements AlertEngine {
     }
 
     private void sendDownAlertIfNotCoolingDown(Monitor monitor, MonitorStatus status, Incident incident, Instant now) {
+        Plan plan = planFor(monitor);
+        Duration cooldown = plan != null ? Duration.ofSeconds(plan.getAlertCooldownSeconds()) : alertProps.getCooldown();
+
         LocalDateTime lastAlert = status.getLastAlertSentAt();
         boolean coolingDown = lastAlert != null
-                && Duration.between(lastAlert.toInstant(ZoneOffset.UTC), now).compareTo(alertProps.getCooldown()) < 0;
+                && Duration.between(lastAlert.toInstant(ZoneOffset.UTC), now).compareTo(cooldown) < 0;
         if (coolingDown) {
+            metricsService.recordAlertSuppressed("cooldown");
             return; // suppress repeated DOWN alerts within the cooldown window
         }
+
+        UUID userId = userIdOf(monitor);
+        LocalDate day = LocalDate.ofInstant(now, ZoneOffset.UTC);
+        if (plan != null && userId != null && dailyAlertsUsed(userId, day) >= plan.getMaxAlertsPerDay()) {
+            metricsService.recordAlertSuppressed("daily_cap");
+            return; // user has hit their daily alert cap
+        }
+
         notificationService.enqueue(monitor, incident, AlertType.DOWN, now);
+        if (userId != null) {
+            userAlertUsageRepository.incrementAlerts(userId, day);
+        }
         status.setLastAlertSentAt(toLocal(now));
+    }
+
+    /** Resolves the owning user's plan from the cache. Returns null if the user/plan is unset. */
+    private Plan planFor(Monitor monitor) {
+        User user = monitor.getUser();
+        if (user == null || user.getPlan() == null) {
+            return null;
+        }
+        return planService.getById(user.getPlan().getId());
+    }
+
+    private UUID userIdOf(Monitor monitor) {
+        return monitor.getUser() != null ? monitor.getUser().getId() : null;
+    }
+
+    private int dailyAlertsUsed(UUID userId, LocalDate day) {
+        return userAlertUsageRepository.findByUserIdAndDay(userId, day)
+                .map(UserAlertUsage::getAlertsSent)
+                .orElse(0);
     }
 
     private String reasonFor(CheckResult result) {

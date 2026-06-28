@@ -30,8 +30,8 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
             AuthenticationException authException
     ) throws IOException {
 
-        log.error("Responding with unauthorized error. Message - {}",
-                authException.getMessage());
+        log.error("Responding with unauthorized error for {} {}. Message - {}",
+                request.getMethod(), request.getRequestURI(), authException.getMessage());
 
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(java.time.LocalDateTime.now())

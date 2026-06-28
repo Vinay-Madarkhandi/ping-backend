@@ -38,7 +38,12 @@ public class JwtAuthenticationFilters extends OncePerRequestFilter {
 
         // Skip auth endpoints
         if (path.startsWith("/api/v1/auth/signin")
-                || path.startsWith("/api/v1/auth/signup") || path.startsWith("/api/v1/health")) {
+                || path.startsWith("/api/v1/auth/signup")
+                || path.startsWith("/api/v1/health")
+                || path.startsWith("/actuator/health")
+                || path.startsWith("/actuator/info")
+                || path.startsWith("/actuator/prometheus")
+                || path.startsWith("/error")) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -51,6 +56,11 @@ public class JwtAuthenticationFilters extends OncePerRequestFilter {
                     break;
                 }
             }
+        }
+
+        if (log.isDebugEnabled()) {
+            log.debug("JWT auth check for {} {}: JwtToken cookie present={}",
+                    request.getMethod(), path, token != null);
         }
 
         if (token != null) {
@@ -74,11 +84,17 @@ public class JwtAuthenticationFilters extends OncePerRequestFilter {
 
                         SecurityContextHolder.getContext()
                                 .setAuthentication(authToken);
+                        log.debug("JWT auth success for {} {}", request.getMethod(), path);
+                    } else {
+                        log.warn("JWT auth rejected for {} {}: token validation returned false for subject {}",
+                                request.getMethod(), path, email);
                     }
                 }
             } catch (Exception e) {
-                log.error("JWT authentication failed", e);
+                log.error("JWT authentication failed for {} {}", request.getMethod(), path, e);
             }
+        } else {
+            log.warn("JWT auth missing JwtToken cookie for {} {}", request.getMethod(), path);
         }
 
         filterChain.doFilter(request, response);

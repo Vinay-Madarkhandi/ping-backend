@@ -38,6 +38,7 @@ public class MonitorService {
     private final MonitorPauseWindowRepository pauseWindowRepository;
     private final IncidentService incidentService;
     private final UrlSafetyValidator urlSafetyValidator;
+    private final UsageLimitService usageLimitService;
     private final DatabaseClock clock;
 
     public List<MonitorListResponseDto> getAllMonitorsByUserId(UUID userId) {
@@ -149,6 +150,10 @@ public class MonitorService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         urlSafetyValidator.validate(createMonitorRequestDto.getUrl());
+        usageLimitService.validateNewMonitor(
+                user,
+                createMonitorRequestDto.getIntervalMilliseconds(),
+                createMonitorRequestDto.getTimeoutMilliseconds());
 
         Monitor monitor = monitorMapper.toEntity(createMonitorRequestDto);
         monitor.setUser(user);

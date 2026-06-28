@@ -13,6 +13,7 @@ import java.util.UUID;
  */
 public record CheckSpec(
         UUID monitorId,
+        UUID userId,
         String url,
         MonitorMethod method,
         int timeoutMillis,
@@ -25,6 +26,8 @@ public record CheckSpec(
     public static CheckSpec from(Monitor monitor) {
         return new CheckSpec(
                 monitor.getId(),
+                // Reading the id off the lazy proxy does not initialise the User (no extra query).
+                monitor.getUser() != null ? monitor.getUser().getId() : null,
                 monitor.getUrl(),
                 monitor.getMonitorMethod() != null ? monitor.getMonitorMethod() : MonitorMethod.GET,
                 monitor.getTimeoutMilliseconds(),
