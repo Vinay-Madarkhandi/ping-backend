@@ -17,6 +17,12 @@ public interface MetricsService {
     /** Records an alert state transition that produced a notification ("down"/"recovery"). */
     void recordAlert(String type);
 
+    /** Records a DOWN alert that was suppressed, by reason ("cooldown"/"daily_cap"). */
+    void recordAlertSuppressed(String reason);
+
+    /** Reports the current number of monitors quota-blocked from scheduling (set each enforcement run). */
+    void setQuotaBlockedMonitors(long count);
+
     /** Records an outbox email outcome ("sent"/"retry"/"failed"). */
     void recordEmail(String outcome);
 }

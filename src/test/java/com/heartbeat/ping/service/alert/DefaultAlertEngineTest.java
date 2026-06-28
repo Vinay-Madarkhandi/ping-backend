@@ -6,8 +6,11 @@ import com.heartbeat.ping.modles.Monitor;
 import com.heartbeat.ping.modles.MonitorState;
 import com.heartbeat.ping.modles.MonitorStatus;
 import com.heartbeat.ping.modles.User;
+import com.heartbeat.ping.repository.UserAlertUsageRepository;
+import com.heartbeat.ping.service.PlanService;
 import com.heartbeat.ping.service.check.CheckResult;
 import com.heartbeat.ping.service.incident.IncidentService;
+import com.heartbeat.ping.service.metrics.MetricsService;
 import com.heartbeat.ping.service.notification.AlertType;
 import com.heartbeat.ping.service.notification.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +38,12 @@ class DefaultAlertEngineTest {
     private IncidentService incidentService;
     @Mock
     private NotificationService notificationService;
+    @Mock
+    private PlanService planService;
+    @Mock
+    private UserAlertUsageRepository userAlertUsageRepository;
+    @Mock
+    private MetricsService metricsService;
 
     private AlertProperties alertProps;
     private DefaultAlertEngine engine;
@@ -47,7 +56,8 @@ class DefaultAlertEngineTest {
         alertProps = new AlertProperties();
         alertProps.setFailureThreshold(3);
         alertProps.setRecoveryThreshold(1);
-        engine = new DefaultAlertEngine(alertProps, incidentService, notificationService);
+        engine = new DefaultAlertEngine(alertProps, incidentService, notificationService,
+                planService, userAlertUsageRepository, metricsService);
 
         UUID monitorId = UUID.randomUUID();
         monitor = Monitor.builder().name("api").url("https://x").build();

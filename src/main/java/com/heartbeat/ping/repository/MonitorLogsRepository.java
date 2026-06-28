@@ -47,6 +47,15 @@ public interface MonitorLogsRepository extends JpaRepository<MonitorLogs, UUID> 
     @Query("delete from MonitorLogs l where l.checkedAt < :cutoff")
     int deleteByCheckedAtBefore(@Param("cutoff") LocalDateTime cutoff);
 
+    /** Bulk-deletes raw logs older than the cutoff for monitors owned by users on the given plan. */
+    @Modifying
+    @Query("""
+            delete from MonitorLogs l
+            where l.checkedAt < :cutoff
+              and l.monitor.id in (select m.id from Monitor m where m.user.plan.id = :planId)
+            """)
+    int deleteByCheckedAtBeforeForPlan(@Param("cutoff") LocalDateTime cutoff, @Param("planId") UUID planId);
+
     /** Distinct monitor ids that have any log at or after the cutoff (for daily rollup). */
     @Query("select distinct l.monitor.id from MonitorLogs l where l.checkedAt >= :from and l.checkedAt < :to")
     List<UUID> findMonitorIdsWithLogsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);

@@ -7,6 +7,7 @@ import com.heartbeat.ping.modles.MonitorStatus;
 import com.heartbeat.ping.repository.MonitorLogsRepository;
 import com.heartbeat.ping.repository.MonitorRepository;
 import com.heartbeat.ping.repository.MonitorStatusRepository;
+import com.heartbeat.ping.repository.UserUsageRepository;
 import com.heartbeat.ping.service.alert.AlertEngine;
 import com.heartbeat.ping.service.check.CheckResult;
 import com.heartbeat.ping.service.check.CheckSpec;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -37,6 +39,7 @@ public class MonitorCheckTransactionService {
     private final MonitorRepository monitorRepository;
     private final MonitorLogsRepository monitorLogsRepository;
     private final MonitorStatusRepository statusRepository;
+    private final UserUsageRepository userUsageRepository;
     private final AlertEngine alertEngine;
     private final DatabaseClock clock;
 
@@ -48,7 +51,7 @@ public class MonitorCheckTransactionService {
     }
 
     @Transactional
-    public void recordResult(UUID monitorId, CheckResult result) {
+    public void recordResult(UUID monitorId, UUID userId, CheckResult result) {
         Monitor monitor = monitorRepository.findById(monitorId).orElse(null);
         if (monitor == null || monitor.getDeletedAt() != null) {
             return; // deleted/archived between claim and persistence — discard
@@ -60,6 +63,12 @@ public class MonitorCheckTransactionService {
                 .orElseGet(() -> createStatus(monitor));
 
         monitorLogsRepository.save(toLog(monitor, result, now));
+
+        // Every executed check consumes quota, regardless of outcome.
+        if (userId != null) {
+            LocalDate periodMonth = LocalDate.ofInstant(now, ZoneOffset.UTC).withDayOfMonth(1);
+            userUsageRepository.incrementChecks(userId, periodMonth);
+        }
 
         // Paused monitors record the log but skip the FSM; inconclusive (infra) results never
         // drive state, incidents or alerts (handled inside the alert engine).

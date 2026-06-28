@@ -2,6 +2,7 @@ package com.heartbeat.ping.controller;
 
 import com.heartbeat.ping.dto.auth.AuthRequestDto;
 import com.heartbeat.ping.dto.auth.AuthResponseDto;
+import com.heartbeat.ping.dto.auth.MeResponse;
 import com.heartbeat.ping.dto.auth.UserSignUpRequestDto;
 import com.heartbeat.ping.dto.auth.UserSignUpResponseDto;
 import com.heartbeat.ping.service.AuthService;
@@ -12,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -66,6 +68,11 @@ public class AuthController {
     @GetMapping("/validate")
     public ResponseEntity<AuthResponseDto> validate(HttpServletRequest request){
         return ResponseEntity.ok(new AuthResponseDto(true));
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<MeResponse> me(Authentication authentication){
+        return ResponseEntity.ok(authService.me(authentication.getName()));
     }
 
 

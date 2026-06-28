@@ -1,11 +1,12 @@
 package com.heartbeat.ping.service.retention;
 
-import com.heartbeat.ping.config.properties.RetentionProperties;
 import com.heartbeat.ping.modles.MonitorDailyStats;
 import com.heartbeat.ping.modles.MonitorLogs;
+import com.heartbeat.ping.modles.Plan;
 import com.heartbeat.ping.repository.IncidentRepository;
 import com.heartbeat.ping.repository.MonitorDailyStatsRepository;
 import com.heartbeat.ping.repository.MonitorLogsRepository;
+import com.heartbeat.ping.repository.PlanRepository;
 import com.heartbeat.ping.service.time.DatabaseClock;
 import com.heartbeat.ping.service.uptime.TimeInterval;
 import com.heartbeat.ping.service.uptime.UptimeCalculator;
@@ -33,8 +34,8 @@ public class RetentionService {
     private final MonitorLogsRepository logsRepository;
     private final IncidentRepository incidentRepository;
     private final MonitorDailyStatsRepository dailyStatsRepository;
+    private final PlanRepository planRepository;
     private final UptimeCalculator calculator;
-    private final RetentionProperties props;
     private final DatabaseClock clock;
 
     @Transactional
@@ -43,9 +44,15 @@ public class RetentionService {
         LocalDate yesterday = LocalDate.ofInstant(now, ZoneOffset.UTC).minusDays(1);
         rollupDay(yesterday);
 
-        LocalDateTime cutoff = LocalDateTime.ofInstant(now, ZoneOffset.UTC).minusDays(props.getDays());
-        int purged = logsRepository.deleteByCheckedAtBefore(cutoff);
-        log.info("Retention: rolled up {}, purged {} logs older than {} days", yesterday, purged, props.getDays());
+        // Purge per plan, each with its own retention window. Daily stats (rolled up above) survive.
+        LocalDateTime nowLocal = LocalDateTime.ofInstant(now, ZoneOffset.UTC);
+        int purged = 0;
+        for (Plan plan : planRepository.findAll()) {
+            LocalDateTime cutoff = nowLocal.minusDays(plan.getRetentionDays());
+            purged += logsRepository.deleteByCheckedAtBeforeForPlan(cutoff, plan.getId());
+        }
+        log.info("Retention: rolled up {}, purged {} logs across {} plan window(s)",
+                yesterday, purged, planRepository.count());
     }
 
     private void rollupDay(LocalDate day) {

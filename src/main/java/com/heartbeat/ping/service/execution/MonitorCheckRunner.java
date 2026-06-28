@@ -33,7 +33,7 @@ public class MonitorCheckRunner {
         }
 
         CheckResult result = healthCheckService.check(spec.get());
-        transactionService.recordResult(monitorId, result);
+        transactionService.recordResult(monitorId, spec.get().userId(), result);
         metricsService.recordCheck(result.outcome(), result.responseTimeMs());
     }
 }

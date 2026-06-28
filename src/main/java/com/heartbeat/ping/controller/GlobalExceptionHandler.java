@@ -1,6 +1,9 @@
 package com.heartbeat.ping.controller;
 
 import com.heartbeat.ping.dto.Error.ErrorResponse;
+import com.heartbeat.ping.service.PlanLimitExceededException;
+import com.heartbeat.ping.service.billing.BillingException;
+import com.heartbeat.ping.service.billing.PaymentVerificationException;
 import com.heartbeat.ping.service.security.SsrfValidationException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -49,6 +52,30 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         return build(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(PlanLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handlePlanLimit(
+            PlanLimitExceededException ex,
+            HttpServletRequest request
+    ) {
+        return build(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(BillingException.class)
+    public ResponseEntity<ErrorResponse> handleBilling(
+            BillingException ex,
+            HttpServletRequest request
+    ) {
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(PaymentVerificationException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentVerification(
+            PaymentVerificationException ex,
+            HttpServletRequest request
+    ) {
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
     }
 
     private ResponseEntity<ErrorResponse> build(

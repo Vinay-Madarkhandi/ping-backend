@@ -55,6 +55,10 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       # --- Auth ---
       JWT_SECRET: ${JWT_SECRET}
+      # --- Billing (Razorpay): test vs live differ only by these env values ---
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
       # --- Observability: app log level (INFO default; DEBUG for troubleshooting) ---
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # --- Optional: allow monitoring private/localhost targets for local testing ---
