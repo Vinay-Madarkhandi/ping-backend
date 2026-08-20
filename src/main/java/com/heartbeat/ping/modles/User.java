@@ -23,6 +23,10 @@ public class User extends BaseModel {
     @Column(nullable = false, unique = true)
     private String email;
 
+    @Column(name = "email_verified", nullable = false)
+    @Builder.Default
+    private boolean emailVerified = false;
+
     @Column(nullable = false)
     private String passwordHash;
 
@@ -48,6 +52,14 @@ public class User extends BaseModel {
     /** Optional external billing customer id (reserved for future Razorpay customer mapping). */
     @Column(name = "billing_customer_id")
     private String billingCustomerId;
+
+    /**
+     * Soft delete timestamp. When set, the user is considered deleted and cannot log in.
+     * Email is anonymized to prevent conflicts with new registrations.
+     */
+    @Column(name = "deleted_at")
+    @JdbcTypeCode(SqlTypes.TIMESTAMP)
+    private Instant deletedAt;
 
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
     private  List<Monitor> monitors;

@@ -43,6 +43,8 @@ public class JwtAuthenticationFilters extends OncePerRequestFilter {
                 || path.startsWith("/actuator/health")
                 || path.startsWith("/actuator/info")
                 || path.startsWith("/actuator/prometheus")
+                || path.startsWith("/v3/api-docs")
+                || path.startsWith("/swagger-ui")
                 || path.startsWith("/error")) {
             filterChain.doFilter(request, response);
             return;

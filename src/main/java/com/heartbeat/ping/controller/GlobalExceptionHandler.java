@@ -4,6 +4,7 @@ import com.heartbeat.ping.dto.Error.ErrorResponse;
 import com.heartbeat.ping.service.PlanLimitExceededException;
 import com.heartbeat.ping.service.billing.BillingException;
 import com.heartbeat.ping.service.billing.PaymentVerificationException;
+import com.heartbeat.ping.service.execution.ManualCheckThrottledException;
 import com.heartbeat.ping.service.security.SsrfValidationException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -76,6 +77,15 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
+    /** On-demand checks are user-triggered outbound traffic, so they are rate limited. */
+    @ExceptionHandler(ManualCheckThrottledException.class)
+    public ResponseEntity<ErrorResponse> handleThrottled(
+            ManualCheckThrottledException ex,
+            HttpServletRequest request
+    ) {
+        return build(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request);
     }
 
     private ResponseEntity<ErrorResponse> build(

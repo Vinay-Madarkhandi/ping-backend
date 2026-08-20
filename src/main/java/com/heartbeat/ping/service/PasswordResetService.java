@@ -43,6 +43,9 @@ public class PasswordResetService {
     private final BCryptPasswordEncoder passwordEncoder;
     private final DefaultNotificationService notificationService;
 
+    @org.springframework.beans.factory.annotation.Value("${frontend.url}")
+    private String frontendUrl;
+
     /**
      * Initiate password reset by sending a reset email. Always returns success, even for
      * non-existent emails, to prevent email enumeration attacks.
@@ -120,8 +123,7 @@ public class PasswordResetService {
      * Build the password reset link. In production, this would use the frontend URL from config.
      */
     private String buildResetLink(String token) {
-        // TODO: Read frontend URL from application properties
-        return "https://app.pingmeheart.online/reset-password?token=" + token;
+        return frontendUrl + "/reset-password?token=" + token;
     }
 
     /**

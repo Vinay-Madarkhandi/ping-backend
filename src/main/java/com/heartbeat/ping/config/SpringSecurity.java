@@ -56,6 +56,9 @@ public class SpringSecurity {
                                 .requestMatchers("/api/v1/webhooks/**").permitAll()
                                 // /actuator/health/** also covers the liveness/readiness probe groups.
                                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
+                                // OpenAPI spec + Swagger UI. Like actuator, these are unauthenticated so
+                                // tooling can fetch the contract — network-restrict them in production.
+                                .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                                 .requestMatchers("/api/v1/auth/validate").authenticated()
                                 .anyRequest().authenticated()
                 )

@@ -45,6 +45,9 @@ dependencies {
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+	// Spring Boot 4 split MockMvc test support out of spring-boot-starter-test into its own module.
+	// Needed by OpenApiDocsTest to assert the published OpenAPI contract over HTTP.
+	testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
 	// Real-Postgres integration tests (FOR UPDATE SKIP LOCKED, Flyway against Postgres)
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 	testImplementation 'org.testcontainers:junit-jupiter:1.20.4'
@@ -58,6 +61,9 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
 	// Razorpay SDK for order creation (signature verification is done manually, see billing package)
 	implementation 'com.razorpay:razorpay-java:1.4.8'
+	// OpenAPI 3 spec + Swagger UI. The 3.0.x line is the Spring Boot 4 line (2.x supports Boot 3 only).
+	// Publishing a machine-readable contract is what keeps the separate frontend repo from drifting.
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 }
 
 tasks.named('test') {

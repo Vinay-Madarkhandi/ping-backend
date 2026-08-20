@@ -40,6 +40,9 @@ public class EmailVerificationService {
     private final UserRepository userRepository;
     private final DefaultNotificationService notificationService;
 
+    @org.springframework.beans.factory.annotation.Value("${frontend.url}")
+    private String frontendUrl;
+
     /**
      * Send or resend a verification email for a user. Called on signup or when user clicks "resend".
      */
@@ -116,8 +119,7 @@ public class EmailVerificationService {
      * Build the email verification link. In production, this would use the frontend URL from config.
      */
     private String buildVerificationLink(String token) {
-        // TODO: Read frontend URL from application properties
-        return "https://app.pingmeheart.online/verify-email?token=" + token;
+        return frontendUrl + "/verify-email?token=" + token;
     }
 
     /**

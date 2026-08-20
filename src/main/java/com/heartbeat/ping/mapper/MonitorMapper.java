@@ -35,7 +35,8 @@ public class MonitorMapper {
                 .build();
     }
 
-    private MonitorMethod parseMethod(String method) {
+    /** Parses the HTTP method, defaulting to GET. Public so edits reuse identical parsing to creation. */
+    public MonitorMethod parseMethod(String method) {
         if (method == null || method.isBlank()) {
             return MonitorMethod.GET;
         }

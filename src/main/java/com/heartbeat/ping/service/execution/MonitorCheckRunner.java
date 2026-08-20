@@ -27,13 +27,22 @@ public class MonitorCheckRunner {
     private final MetricsService metricsService;
 
     public void run(UUID monitorId) {
+        runAndReport(monitorId);
+    }
+
+    /**
+     * Same pipeline as {@link #run(UUID)} but returns the outcome, so an on-demand check can report
+     * back to the caller. Empty when the monitor was archived between claim and execution.
+     */
+    public Optional<CheckResult> runAndReport(UUID monitorId) {
         Optional<CheckSpec> spec = transactionService.loadSpec(monitorId);
         if (spec.isEmpty()) {
-            return; // deleted between claim and execution
+            return Optional.empty(); // deleted between claim and execution
         }
 
         CheckResult result = healthCheckService.check(spec.get());
         transactionService.recordResult(monitorId, spec.get().userId(), result);
         metricsService.recordCheck(result.outcome(), result.responseTimeMs());
+        return Optional.of(result);
     }
 }

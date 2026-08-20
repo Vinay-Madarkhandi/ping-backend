@@ -24,12 +24,13 @@ class AuthServiceTest {
 
     @Mock private UserRepository userRepository;
     @Mock private PlanService planService;
+    @Mock private EmailVerificationService emailVerificationService;
 
     private AuthService service;
 
     @BeforeEach
     void setUp() {
-        service = new AuthService(userRepository, new BCryptPasswordEncoder(), planService);
+        service = new AuthService(userRepository, new BCryptPasswordEncoder(), planService, emailVerificationService);
     }
 
     @Test

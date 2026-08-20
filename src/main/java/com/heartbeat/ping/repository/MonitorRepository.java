@@ -27,6 +27,13 @@ public interface MonitorRepository extends JpaRepository<Monitor, UUID> {
     /** Active (non-archived) monitors for a user. */
     List<Monitor> findByUser_IdAndDeletedAtIsNull(UUID userId);
 
+    /** Archived monitors for a user, so archiving stays reversible from the UI. */
+    List<Monitor> findByUser_IdAndDeletedAtIsNotNull(UUID userId);
+
+    /** All monitor ids owned by a user, for scoping account-wide queries such as alert history. */
+    @Query("select m.id from Monitor m where m.user.id = :userId")
+    List<UUID> findIdsByUserId(@Param("userId") UUID userId);
+
     Optional<Monitor> findByIdAndUser_Id(UUID monitorId, UUID userId);
 
     /** Number of active (non-archived) monitors a user owns — enforces the plan's max-monitors limit. */

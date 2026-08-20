@@ -4,6 +4,7 @@ import com.heartbeat.ping.modles.EmailOutbox;
 import com.heartbeat.ping.modles.EmailStatus;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -13,6 +14,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -20,6 +22,12 @@ import java.util.UUID;
 public interface EmailOutboxRepository extends JpaRepository<EmailOutbox, UUID> {
 
     boolean existsByDedupeKey(String dedupeKey);
+
+    /** Alert delivery history for one monitor, newest first. */
+    Page<EmailOutbox> findByMonitorIdOrderByCreatedAtDesc(UUID monitorId, Pageable pageable);
+
+    /** Account-wide alert delivery history, scoped by the caller's monitor ids. */
+    Page<EmailOutbox> findByMonitorIdInOrderByCreatedAtDesc(Collection<UUID> monitorIds, Pageable pageable);
 
     /**
      * Claims a batch of sendable emails (PENDING and due) with {@code FOR UPDATE SKIP LOCKED}

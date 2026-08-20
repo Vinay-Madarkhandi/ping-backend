@@ -65,12 +65,21 @@ public class MonitorAnalyticService {
         boolean isUp = status.getCurrentState() == MonitorState.UP;
 
         String currentState = status.getCurrentState().name();
-        String displayState = monitor.isPaused() ? "PAUSED" : currentState;
+        // Precedence: quota block (system-imposed) > paused (user-imposed) > health state.
+        String displayState;
+        if (monitor.isQuotaBlocked()) {
+            displayState = "QUOTA_EXCEEDED";
+        } else if (monitor.isPaused()) {
+            displayState = "PAUSED";
+        } else {
+            displayState = currentState;
+        }
 
         return MonitorStatusResponse.builder()
                 .isUp(isUp)
                 .currentState(currentState)
                 .displayState(displayState)
+                .quotaBlocked(monitor.isQuotaBlocked())
                 .totalChecks(status.getTotalChecks())
                 .totalUp(status.getTotalUp())
                 .totalDown(status.getTotalDown())
