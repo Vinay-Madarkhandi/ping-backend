@@ -12,10 +12,14 @@ import com.heartbeat.ping.repository.MonitorStatusRepository;
 import com.heartbeat.ping.service.incident.IncidentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -32,6 +36,41 @@ public class MonitorAnalyticService {
             throw new AccessDeniedException("Monitor not found for this user");
         }
         return incidentService.history(monitorId, pageable);
+    }
+
+    /** Bounded to the most recent 5000 incidents so a CSV export can never run away. */
+    public List<Incident> getIncidentsForExport(UUID monitorId, UUID userId) {
+        if (!monitorRepository.existsByIdAndUser_Id(monitorId, userId)) {
+            throw new AccessDeniedException("Monitor not found for this user");
+        }
+        return incidentService.history(monitorId, PageRequest.of(0, 5000)).getContent();
+    }
+
+    private static final Duration MAX_EXPORT_RANGE = Duration.ofDays(90);
+
+    /**
+     * Raw check logs for a CSV export. The range is capped at 90 days so a single request can't be
+     * used to pull a user's entire log history in one unbounded query.
+     */
+    public List<MonitorLogs> getMonitorLogsForExport(
+            UUID monitorId, UUID userId, LocalDateTime from, LocalDateTime to
+    ) {
+        Monitor monitor = monitorRepository
+                .findById(monitorId)
+                .orElseThrow(() -> new AccessDeniedException("Monitor not found for this user"));
+
+        if (!monitor.getUser().getId().equals(userId)) {
+            throw new AccessDeniedException("Monitor not found for this user");
+        }
+
+        if (!to.isAfter(from)) {
+            throw new IllegalArgumentException("'to' must be after 'from'");
+        }
+        if (Duration.between(from, to).compareTo(MAX_EXPORT_RANGE) > 0) {
+            throw new IllegalArgumentException("Export range must be at most 90 days");
+        }
+
+        return logsRepository.findByMonitorIdAndCheckedAtBetween(monitorId, from, to);
     }
 
     public Page<MonitorLogs> getMonitorLogs(
