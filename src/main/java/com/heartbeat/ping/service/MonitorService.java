@@ -7,6 +7,7 @@ import com.heartbeat.ping.dto.monitor.MonitorListResponseDto;
 import com.heartbeat.ping.dto.monitor.UpdateMonitorRequest;
 import com.heartbeat.ping.mapper.MonitorMapper;
 import com.heartbeat.ping.modles.Monitor;
+import com.heartbeat.ping.modles.MonitorKind;
 import com.heartbeat.ping.modles.MonitorPauseWindow;
 import com.heartbeat.ping.modles.MonitorState;
 import com.heartbeat.ping.modles.MonitorStatus;
@@ -103,23 +104,37 @@ public class MonitorService {
                 .filter(m -> m.getDeletedAt() == null)
                 .orElseThrow(() -> new AccessDeniedException("Monitor not found for this user"));
 
-        String newUrl = request.getUrl().trim();
-        boolean urlChanged = !newUrl.equals(monitor.getUrl());
-        if (urlChanged) {
-            urlSafetyValidator.validate(newUrl);
-        }
         usageLimitService.validateMonitorSettings(
                 monitor.getUser(), request.getIntervalMilliseconds(), request.getTimeoutMilliseconds());
 
+        boolean urlChanged = false;
+        if (monitor.getKind() == MonitorKind.HEARTBEAT) {
+            int gracePeriodMs = request.getGracePeriodMilliseconds() != null
+                    ? request.getGracePeriodMilliseconds() : monitor.getGracePeriodMilliseconds();
+            if (gracePeriodMs < 0) {
+                throw new IllegalArgumentException("gracePeriodMilliseconds must not be negative");
+            }
+            monitor.setGracePeriodMilliseconds(gracePeriodMs);
+        } else {
+            if (request.getUrl() == null || request.getUrl().isBlank()) {
+                throw new IllegalArgumentException("url is required for HTTP monitors");
+            }
+            String newUrl = request.getUrl().trim();
+            urlChanged = !newUrl.equals(monitor.getUrl());
+            if (urlChanged) {
+                urlSafetyValidator.validate(newUrl);
+            }
+            monitor.setUrl(newUrl);
+            monitor.setMonitorMethod(monitorMapper.parseMethod(request.getMonitorMethod()));
+            monitor.setExpectedStatusCode(request.getExpectedStatusCode());
+            monitor.setKeyword(blankToNull(request.getKeyword()));
+            monitor.setFollowRedirects(request.getFollowRedirects() == null || request.getFollowRedirects());
+            monitor.setCustomHeaders(request.getCustomHeaders());
+        }
+
         monitor.setName(request.getName().trim());
-        monitor.setUrl(newUrl);
         monitor.setIntervalMilliseconds(request.getIntervalMilliseconds());
         monitor.setTimeoutMilliseconds(request.getTimeoutMilliseconds());
-        monitor.setMonitorMethod(monitorMapper.parseMethod(request.getMonitorMethod()));
-        monitor.setExpectedStatusCode(request.getExpectedStatusCode());
-        monitor.setKeyword(blankToNull(request.getKeyword()));
-        monitor.setFollowRedirects(request.getFollowRedirects() == null || request.getFollowRedirects());
-        monitor.setCustomHeaders(request.getCustomHeaders());
         monitor.setTags(monitorMapper.normalizeTags(request.getTags()));
         if (request.getActive() != null) {
             monitor.setActive(request.getActive());
@@ -257,7 +272,9 @@ public class MonitorService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        urlSafetyValidator.validate(createMonitorRequestDto.getUrl());
+        if (monitorMapper.parseKind(createMonitorRequestDto.getKind()) != MonitorKind.HEARTBEAT) {
+            urlSafetyValidator.validate(createMonitorRequestDto.getUrl());
+        }
         usageLimitService.validateNewMonitor(
                 user,
                 createMonitorRequestDto.getIntervalMilliseconds(),
@@ -319,6 +336,9 @@ public class MonitorService {
                 .timeoutMilliseconds(monitor.getTimeoutMilliseconds())
                 .tags(monitor.getTags())
                 .sslCertExpiresAt(status != null ? status.getSslCertExpiresAt() : null)
+                .kind(monitor.getKind())
+                .heartbeatUrl(monitorMapper.heartbeatUrlFor(monitor))
+                .gracePeriodMilliseconds(monitor.getGracePeriodMilliseconds())
                 .build();
     }
 }

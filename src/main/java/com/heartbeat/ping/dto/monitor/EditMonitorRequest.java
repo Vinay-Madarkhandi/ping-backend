@@ -27,7 +27,7 @@ public class EditMonitorRequest {
     @NotBlank
     private String name;
 
-    @NotBlank
+    /** Required for HTTP monitors; ignored for HEARTBEAT monitors (which have no URL). */
     private String url;
 
     @Positive
@@ -37,6 +37,9 @@ public class EditMonitorRequest {
     private int timeoutMilliseconds;
 
     private String monitorMethod;
+
+    /** HEARTBEAT only: extra time past the interval before a missed ping counts as DOWN. */
+    private Integer gracePeriodMilliseconds;
 
     /** Expected HTTP status; null means any 2xx/3xx counts as up. */
     private Integer expectedStatusCode;

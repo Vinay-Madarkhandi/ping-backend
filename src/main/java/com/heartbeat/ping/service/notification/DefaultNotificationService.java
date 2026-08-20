@@ -168,14 +168,14 @@ public class DefaultNotificationService implements NotificationService {
                     Monitor "%s" (%s) is DOWN.
                     Since: %s
                     Reason: %s
-                    """.formatted(monitor.getName(), monitor.getUrl(), incident.getStartedAt(),
+                    """.formatted(monitor.getName(), monitor.getTargetLabel(), incident.getStartedAt(),
                     incident.getFailureReason() == null ? "unknown" : incident.getFailureReason());
             case RECOVERY -> """
                     Monitor "%s" (%s) has RECOVERED.
                     Down from: %s
                     Recovered at: %s
                     Downtime: %s seconds
-                    """.formatted(monitor.getName(), monitor.getUrl(), incident.getStartedAt(),
+                    """.formatted(monitor.getName(), monitor.getTargetLabel(), incident.getStartedAt(),
                     incident.getResolvedAt(), incident.getDurationSeconds());
         };
     }

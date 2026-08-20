@@ -1,6 +1,7 @@
 package com.heartbeat.ping.service.execution;
 
 import com.heartbeat.ping.modles.Monitor;
+import com.heartbeat.ping.modles.MonitorKind;
 import com.heartbeat.ping.modles.MonitorLogs;
 import com.heartbeat.ping.modles.MonitorState;
 import com.heartbeat.ping.modles.MonitorStatus;
@@ -104,8 +105,15 @@ public class MonitorCheckTransactionService {
                 .build();
     }
 
-    /** Overwrites the lease with the true next due time (on the DB clock) now that the check is done. */
+    /**
+     * Overwrites the lease with the true next due time (on the DB clock) now that the check is done.
+     * For a HEARTBEAT monitor this is the deadline for the <em>next</em> ping: interval plus grace,
+     * from whenever this ping (or missed-ping claim) happened — not a fixed wall-clock schedule.
+     */
     private void reschedule(Monitor monitor, Instant now) {
-        monitor.setNextCheckAt(now.plusMillis(monitor.getIntervalMilliseconds()));
+        long delayMs = monitor.getKind() == MonitorKind.HEARTBEAT
+                ? monitor.getIntervalMilliseconds() + (long) monitor.getGracePeriodMilliseconds()
+                : monitor.getIntervalMilliseconds();
+        monitor.setNextCheckAt(now.plusMillis(delayMs));
     }
 }

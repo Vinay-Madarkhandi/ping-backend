@@ -1,5 +1,6 @@
 package com.heartbeat.ping.dto.monitor;
 
+import com.heartbeat.ping.modles.MonitorKind;
 import com.heartbeat.ping.modles.MonitorMethod;
 import lombok.*;
 
@@ -32,4 +33,10 @@ public class MonitorListResponseDto {
     private int timeoutMilliseconds;
     private Set<String> tags;
     private LocalDateTime sslCertExpiresAt;
+
+    // --- Heartbeat/cron monitoring ---
+    private MonitorKind kind;
+    /** Only present for HEARTBEAT monitors. */
+    private String heartbeatUrl;
+    private int gracePeriodMilliseconds;
 }

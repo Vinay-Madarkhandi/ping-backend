@@ -46,7 +46,7 @@ public class WebhookPayloadBuilder {
     private Map<String, Object> genericPayload(Monitor monitor, Incident incident, AlertType alertType) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("event", alertType.name());
-        payload.put("monitor", Map.of("id", monitor.getId().toString(), "name", monitor.getName(), "url", monitor.getUrl()));
+        payload.put("monitor", Map.of("id", monitor.getId().toString(), "name", monitor.getName(), "url", monitor.getTargetLabel()));
         payload.put("incidentId", incident.getId().toString());
         payload.put("startedAt", incident.getStartedAt().toString());
         if (alertType == AlertType.RECOVERY) {
@@ -62,8 +62,8 @@ public class WebhookPayloadBuilder {
         String bold = discordMarkdown ? "**" : "*";
         if (alertType == AlertType.DOWN) {
             String reason = incident.getFailureReason() != null ? incident.getFailureReason() : "unknown";
-            return "🔴 " + bold + monitor.getName() + bold + " is DOWN\n" + monitor.getUrl() + "\nReason: " + reason;
+            return "🔴 " + bold + monitor.getName() + bold + " is DOWN\n" + monitor.getTargetLabel() + "\nReason: " + reason;
         }
-        return "✅ " + bold + monitor.getName() + bold + " has RECOVERED\n" + monitor.getUrl();
+        return "✅ " + bold + monitor.getName() + bold + " has RECOVERED\n" + monitor.getTargetLabel();
     }
 }
