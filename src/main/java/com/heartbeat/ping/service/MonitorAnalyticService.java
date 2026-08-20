@@ -41,10 +41,10 @@ public class MonitorAnalyticService {
     ) {
         Monitor monitor = monitorRepository
                 .findById(monitorId)
-                .orElseThrow(() -> new RuntimeException("Monitor not found"));
+                .orElseThrow(() -> new AccessDeniedException("Monitor not found for this user"));
 
         if (!monitor.getUser().getId().equals(userId)) {
-            throw new RuntimeException("Unauthorized");
+            throw new AccessDeniedException("Monitor not found for this user");
         }
 
         return logsRepository.findByMonitorIdOrderByCheckedAtDesc(

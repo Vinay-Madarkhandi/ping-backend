@@ -7,7 +7,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.UUID;
 
 public class AuthUserDetails extends User implements UserDetails {
     private String username;
@@ -16,6 +15,11 @@ public class AuthUserDetails extends User implements UserDetails {
     public AuthUserDetails(User user){
         this.username = user.getEmail();
         this.password = user.getPasswordHash();
+        // Carried over from the wrapped user so isEnabled()/getCreatedAt() below reflect the real
+        // account state rather than this object's own (uninitialized) BaseModel fields.
+        this.setId(user.getId());
+        this.setCreatedAt(user.getCreatedAt());
+        this.setDeletedAt(user.getDeletedAt());
     }
 
     @Override
@@ -31,5 +35,16 @@ public class AuthUserDetails extends User implements UserDetails {
     @Override
     public String getUsername() {
         return this.username;
+    }
+
+    /**
+     * A soft-deleted account (see {@link User#getDeletedAt()}) must not authenticate — not just on
+     * signin (checked here via Spring Security's account-status pre-check) but also for any JWT
+     * issued before the deletion; see {@code JwtAuthenticationFilters}, which checks this directly
+     * since it does not go through {@code DaoAuthenticationProvider}.
+     */
+    @Override
+    public boolean isEnabled() {
+        return getDeletedAt() == null;
     }
 }

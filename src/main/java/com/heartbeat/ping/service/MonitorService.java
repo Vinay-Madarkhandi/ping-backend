@@ -181,7 +181,7 @@ public class MonitorService {
         Monitor monitor = monitorRepository
                 .findByIdAndUser_Id(monitorId, userId)
                 .orElseThrow(() ->
-                        new RuntimeException("Monitor not found or does not belong to user")
+                        new AccessDeniedException("Monitor not found or does not belong to user")
                 );
 
         if (monitor.getDeletedAt() != null) {
@@ -198,7 +198,7 @@ public class MonitorService {
     public void updateMonitor(UUID monitorId, UpdateMonitorRequest updateMonitorRequest, UUID userId) {
         Monitor monitor = monitorRepository
                 .findByIdAndUser_Id(monitorId, userId)
-                .orElseThrow(() -> new RuntimeException("Monitor not found"));
+                .orElseThrow(() -> new AccessDeniedException("Monitor not found or does not belong to user"));
 
         if(updateMonitorRequest.getActive() != null){
             monitor.setActive(updateMonitorRequest.getActive());
@@ -244,7 +244,7 @@ public class MonitorService {
 
     private Monitor ownedMonitor(UUID monitorId, UUID userId) {
         return monitorRepository.findByIdAndUser_Id(monitorId, userId)
-                .orElseThrow(() -> new RuntimeException("Monitor not found or does not belong to user"));
+                .orElseThrow(() -> new AccessDeniedException("Monitor not found or does not belong to user"));
     }
 
     public CreateMonitorResponseDto monitorUrl(CreateMonitorRequestDto createMonitorRequestDto){
@@ -254,7 +254,7 @@ public class MonitorService {
         String email = authentication.getName();
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         urlSafetyValidator.validate(createMonitorRequestDto.getUrl());
         usageLimitService.validateNewMonitor(

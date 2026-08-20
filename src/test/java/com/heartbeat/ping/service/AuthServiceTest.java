@@ -1,6 +1,8 @@
 package com.heartbeat.ping.service;
 
 import com.heartbeat.ping.dto.auth.MeResponse;
+import com.heartbeat.ping.dto.auth.UserSignUpRequestDto;
+import com.heartbeat.ping.dto.auth.UserSignUpResponseDto;
 import com.heartbeat.ping.modles.Plan;
 import com.heartbeat.ping.modles.SubscriptionStatus;
 import com.heartbeat.ping.modles.User;
@@ -17,6 +19,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -61,5 +65,28 @@ class AuthServiceTest {
         assertThat(me.plan().maxMonitors()).isEqualTo(50);
         assertThat(me.plan().priceAmount()).isEqualTo(49_900L);
         assertThat(me.plan().currency()).isEqualTo("INR");
+    }
+
+    @Test
+    void signUpSucceedsEvenWhenVerificationEmailFailsToSend() {
+        Plan free = Plan.builder().id(UUID.randomUUID()).name("FREE").build();
+        when(userRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
+        when(planService.getByName("FREE")).thenReturn(free);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User saved = invocation.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+        doThrow(new RuntimeException("SMTP unreachable"))
+                .when(emailVerificationService).sendVerificationEmail("new@example.com");
+
+        UserSignUpRequestDto request = UserSignUpRequestDto.builder()
+                .username("newuser").email("new@example.com").password("secret123")
+                .build();
+
+        UserSignUpResponseDto response = service.userSignUp(request);
+
+        assertThat(response.getUsername()).isEqualTo("newuser");
+        assertThat(response.getId()).isNotNull();
     }
 }

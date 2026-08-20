@@ -7,9 +7,11 @@ import com.heartbeat.ping.dto.plan.PlanResponse;
 import com.heartbeat.ping.modles.Plan;
 import com.heartbeat.ping.modles.User;
 import com.heartbeat.ping.repository.UserRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 public class AuthService {
 
@@ -43,8 +45,15 @@ public class AuthService {
                 .build();
         User response = userRepository.save(user);
 
-        // Send verification email
-        emailVerificationService.sendVerificationEmail(response.getEmail());
+        // The account is already committed at this point; a failure here (e.g. a transient DB
+        // hiccup writing the verification token/outbox row) must not turn a successful signup into
+        // an error response. The user can always retry via POST /auth/resend-verification.
+        try {
+            emailVerificationService.sendVerificationEmail(response.getEmail());
+        } catch (Exception e) {
+            log.error("Failed to send verification email for new user {}; they can use resend-verification",
+                    response.getEmail(), e);
+        }
 
         return UserSignUpResponseDto.from(response);
     }
@@ -52,7 +61,7 @@ public class AuthService {
     /** Current user's profile + plan + subscription state, for the frontend's plan-gated UI. */
     public MeResponse me(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         // Plan id is read off the lazy proxy (no extra query); full plan comes from the cache.
         Plan plan = user.getPlan() != null ? planService.getById(user.getPlan().getId()) : null;
@@ -76,7 +85,7 @@ public class AuthService {
      */
     public void changePassword(String email, String currentPassword, String newPassword) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         // Verify current password
         if (!bCryptPasswordEncoder.matches(currentPassword, user.getPasswordHash())) {
@@ -108,7 +117,7 @@ public class AuthService {
      */
     public void deleteAccount(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         // Soft delete: mark as deleted and anonymize email to prevent conflicts
         user.setDeletedAt(java.time.Instant.now());

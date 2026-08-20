@@ -522,8 +522,9 @@ Before exposing this service outside local development:
 - Use real database credentials and restrict database access.
 - Set secure mail credentials through environment variables only.
 - Put the app behind TLS.
-- Harden the auth cookie for production. The current signin code sets `secure(false)`.
-- Set an explicit `SameSite` cookie policy if this is used from a browser frontend.
+- Auth cookie hardening is config-driven now: `cookie.secure` defaults to `true` and `cookie.same-site`
+  defaults to `Lax`. Only override `COOKIE_SECURE=false` for local HTTP development (docker-compose
+  already does this for you); never in a real deployment.
 - Restrict `/actuator/health`, `/actuator/info`, and `/actuator/prometheus` to internal networks.
 - Keep `monitor.ssrf.allow-private=false` unless running an isolated test environment.
 - Configure Prometheus alerting for scheduler lag, rejected checks, inconclusive checks, failed email,
