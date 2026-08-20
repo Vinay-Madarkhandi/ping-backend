@@ -56,7 +56,16 @@ public class UptimeService {
     public UptimeResult uptime(UUID monitorId, UUID userId, Duration window) {
         Monitor monitor = monitorRepository.findByIdAndUser_Id(monitorId, userId)
                 .orElseThrow(() -> new AccessDeniedException("Monitor not found for this user"));
+        return uptimeFor(monitor, window);
+    }
 
+    /**
+     * Same computation as {@link #uptime(UUID, UUID, Duration)} but without the ownership check —
+     * for callers that have already established the right to see this monitor's status by another
+     * means (e.g. inclusion on a public status page).
+     */
+    @Transactional(readOnly = true)
+    public UptimeResult uptimeFor(Monitor monitor, Duration window) {
         Instant now = clock.now();
         Instant windowEnd = effectiveEnd(monitor, now);
         Instant windowStart = max(windowEnd.minus(window), toInstant(monitor.getCreatedAt()));
@@ -67,12 +76,12 @@ public class UptimeService {
         }
 
         // Incidents (down) and pause windows are never purged, so they cover the full window.
-        List<TimeInterval> down = incidentRepository.findOverlapping(monitorId, windowStart, windowEnd).stream()
+        List<TimeInterval> down = incidentRepository.findOverlapping(monitor.getId(), windowStart, windowEnd).stream()
                 .map(i -> new TimeInterval(i.getStartedAt(),
                         i.getResolvedAt() != null ? i.getResolvedAt() : windowEnd))
                 .toList();
 
-        List<TimeInterval> paused = pauseWindowRepository.findOverlapping(monitorId, windowStart, windowEnd).stream()
+        List<TimeInterval> paused = pauseWindowRepository.findOverlapping(monitor.getId(), windowStart, windowEnd).stream()
                 .map(w -> new TimeInterval(w.getPausedAt(),
                         w.getResumedAt() != null ? w.getResumedAt() : windowEnd))
                 .toList();

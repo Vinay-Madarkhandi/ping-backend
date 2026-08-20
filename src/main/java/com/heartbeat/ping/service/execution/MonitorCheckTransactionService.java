@@ -73,6 +73,9 @@ public class MonitorCheckTransactionService {
         // Paused monitors record the log but skip the FSM; inconclusive (infra) results never
         // drive state, incidents or alerts (handled inside the alert engine).
         if (!monitor.isPaused()) {
+            if (result.sslExpiresAt() != null) {
+                status.setSslCertExpiresAt(LocalDateTime.ofInstant(result.sslExpiresAt(), ZoneOffset.UTC));
+            }
             alertEngine.process(monitor, status, result, now);
             statusRepository.save(status);
         }

@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.UUID;
 
 @Builder
@@ -29,4 +30,6 @@ public class MonitorListResponseDto {
     private String displayState;
     private int intervalMilliseconds;
     private int timeoutMilliseconds;
+    private Set<String> tags;
+    private LocalDateTime sslCertExpiresAt;
 }

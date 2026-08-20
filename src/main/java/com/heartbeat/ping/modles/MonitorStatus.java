@@ -55,4 +55,11 @@ public class MonitorStatus {
 
     /** Last time any alert was dispatched, used to enforce the cooldown window. */
     private LocalDateTime lastAlertSentAt;
+
+    /**
+     * Expiry of the TLS certificate presented on the most recent HTTPS check, captured from the
+     * check's own TLS session (no separate probe). Null for HTTP monitors or before the first
+     * successful TLS handshake.
+     */
+    private LocalDateTime sslCertExpiresAt;
 }

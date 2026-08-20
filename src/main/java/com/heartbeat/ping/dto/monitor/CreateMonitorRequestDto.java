@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Positive;
 import lombok.*;
 
 import java.util.Map;
+import java.util.Set;
 
 @Builder
 @Setter
@@ -40,4 +41,7 @@ public class CreateMonitorRequestDto {
     private Boolean followRedirects;
 
     private Map<String, String> customHeaders;
+
+    /** Free-form labels for grouping/filtering. Optional; normalized and capped by the service. */
+    private Set<String> tags;
 }

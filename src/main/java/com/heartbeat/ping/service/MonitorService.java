@@ -120,6 +120,7 @@ public class MonitorService {
         monitor.setKeyword(blankToNull(request.getKeyword()));
         monitor.setFollowRedirects(request.getFollowRedirects() == null || request.getFollowRedirects());
         monitor.setCustomHeaders(request.getCustomHeaders());
+        monitor.setTags(monitorMapper.normalizeTags(request.getTags()));
         if (request.getActive() != null) {
             monitor.setActive(request.getActive());
         }
@@ -316,6 +317,8 @@ public class MonitorService {
                 .displayState(displayState)
                 .intervalMilliseconds(monitor.getIntervalMilliseconds())
                 .timeoutMilliseconds(monitor.getTimeoutMilliseconds())
+                .tags(monitor.getTags())
+                .sslCertExpiresAt(status != null ? status.getSslCertExpiresAt() : null)
                 .build();
     }
 }

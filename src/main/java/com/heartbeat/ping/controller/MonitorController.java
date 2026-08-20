@@ -12,12 +12,14 @@ import com.heartbeat.ping.dto.monitor.EditMonitorRequest;
 import com.heartbeat.ping.dto.monitor.ManualCheckResponse;
 import com.heartbeat.ping.dto.monitor.MonitorListResponseDto;
 import com.heartbeat.ping.dto.monitor.UpdateMonitorRequest;
+import com.heartbeat.ping.modles.Incident;
 import com.heartbeat.ping.modles.MonitorLogs;
 import com.heartbeat.ping.repository.UserRepository;
 import com.heartbeat.ping.service.MonitorAnalyticService;
 import com.heartbeat.ping.service.MonitorService;
 import com.heartbeat.ping.service.ResourceNotFoundException;
 import com.heartbeat.ping.service.execution.ManualCheckService;
+import com.heartbeat.ping.service.export.CsvWriter;
 import com.heartbeat.ping.service.notification.AlertHistoryService;
 import com.heartbeat.ping.service.uptime.UptimeService;
 import jakarta.validation.Valid;
@@ -25,12 +27,18 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.convert.DurationStyle;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 
@@ -66,6 +74,32 @@ public class MonitorController {
                 : monitorService.getAllMonitorsByUserId(userId);
 
         return new ResponseEntity<>(monitors, HttpStatus.OK);
+    }
+
+    /** CSV of all active monitors and their current summary state. */
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> exportMonitors(Authentication authentication) {
+        List<MonitorListResponseDto> monitors =
+                monitorService.getAllMonitorsByUserId(currentUserId(authentication));
+
+        List<String> headers = List.of(
+                "Name", "URL", "Method", "Active", "State", "Uptime %", "Tags", "SSL Expires", "Created At"
+        );
+        List<List<String>> rows = monitors.stream()
+                .map(m -> List.of(
+                        m.getName(),
+                        m.getUrl(),
+                        m.getMethod() != null ? m.getMethod().name() : "",
+                        String.valueOf(m.isActive()),
+                        m.getDisplayState(),
+                        String.format("%.2f", m.getUptimePercentage()),
+                        m.getTags() == null ? "" : String.join(";", m.getTags()),
+                        m.getSslCertExpiresAt() != null ? m.getSslCertExpiresAt().toString() : "",
+                        m.getCreatedAt() != null ? m.getCreatedAt().toString() : ""
+                ))
+                .toList();
+
+        return csvResponse("monitors.csv", CsvWriter.write(headers, rows));
     }
 
     /** Full replacement of a monitor's configuration. Re-validates SSRF and plan limits. */
@@ -172,6 +206,39 @@ public class MonitorController {
         );
     }
 
+    /** CSV of raw check logs in [from, to). Defaults to the last 7 days; range is capped at 90 days. */
+    @GetMapping("/{monitorId}/logs/export")
+    public ResponseEntity<byte[]> exportLogs(
+            @PathVariable UUID monitorId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            Authentication authentication
+    ) {
+        LocalDateTime rangeEnd = to != null ? to : LocalDateTime.now();
+        LocalDateTime rangeStart = from != null ? from : rangeEnd.minusDays(7);
+
+        List<MonitorLogs> logs = monitorAnalyticService.getMonitorLogsForExport(
+                monitorId, currentUserId(authentication), rangeStart, rangeEnd);
+
+        List<String> headers = List.of(
+                "Checked At", "Status Code", "Response Time (ms)", "Up", "Outcome", "Error"
+        );
+        List<List<String>> rows = logs.stream()
+                .map(log -> List.of(
+                        log.getCheckedAt() != null ? log.getCheckedAt().toString() : "",
+                        String.valueOf(log.getStatusCode()),
+                        String.valueOf(log.getResponseTimeInMilli()),
+                        String.valueOf(log.isUp()),
+                        log.getOutcome() != null ? log.getOutcome().name() : "",
+                        log.getErrorMessage() != null ? log.getErrorMessage() : ""
+                ))
+                .toList();
+
+        return csvResponse("monitor-logs.csv", CsvWriter.write(headers, rows));
+    }
+
     @GetMapping("/{monitorId}/status")
     public ResponseEntity<MonitorStatusResponse> getStatus(
             @PathVariable UUID monitorId,
@@ -213,6 +280,31 @@ public class MonitorController {
         return ResponseEntity.ok(incidents);
     }
 
+    /** CSV of this monitor's incident history, most recent first (capped at 5000 rows). */
+    @GetMapping("/{monitorId}/incidents/export")
+    public ResponseEntity<byte[]> exportIncidents(
+            @PathVariable UUID monitorId,
+            Authentication authentication
+    ) {
+        List<Incident> incidents = monitorAnalyticService
+                .getIncidentsForExport(monitorId, currentUserId(authentication));
+
+        List<String> headers = List.of(
+                "Started At", "Resolved At", "Duration (s)", "Status", "Failure Reason"
+        );
+        List<List<String>> rows = incidents.stream()
+                .map(incident -> List.of(
+                        incident.getStartedAt() != null ? incident.getStartedAt().toString() : "",
+                        incident.getResolvedAt() != null ? incident.getResolvedAt().toString() : "",
+                        incident.getDurationSeconds() != null ? incident.getDurationSeconds().toString() : "",
+                        incident.getStatus() != null ? incident.getStatus().name() : "",
+                        incident.getFailureReason() != null ? incident.getFailureReason() : ""
+                ))
+                .toList();
+
+        return csvResponse("monitor-incidents.csv", CsvWriter.write(headers, rows));
+    }
+
     @GetMapping("/{monitorId}/uptime")
     public ResponseEntity<UptimeResponse> getUptime(
             @PathVariable UUID monitorId,
@@ -231,5 +323,13 @@ public class MonitorController {
         return userRepository.findByEmail(authentication.getName())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"))
                 .getId();
+    }
+
+    private ResponseEntity<byte[]> csvResponse(String filename, String csv) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("text/csv; charset=UTF-8"));
+        headers.setContentDisposition(
+                org.springframework.http.ContentDisposition.attachment().filename(filename).build());
+        return new ResponseEntity<>(csv.getBytes(StandardCharsets.UTF_8), headers, HttpStatus.OK);
     }
 }

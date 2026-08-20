@@ -61,6 +61,11 @@ public class SpringSecurity {
                                 .requestMatchers("/error").permitAll()
                                 // Razorpay calls this server-to-server; it is authenticated by HMAC, not JWT.
                                 .requestMatchers("/api/v1/webhooks/**").permitAll()
+                                // Published status pages are meant to be viewed by anyone with the link —
+                                // that's the entire point of the feature. StatusPageService's public
+                                // projection is what keeps this from leaking anything beyond the owner's
+                                // chosen monitor names, states, and uptime percentages.
+                                .requestMatchers("/api/v1/public/**").permitAll()
                                 // /actuator/health/** also covers the liveness/readiness probe groups.
                                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                                 // loggers/threaddump/metrics expose operational internals (can change log
