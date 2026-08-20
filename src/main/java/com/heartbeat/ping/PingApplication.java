@@ -9,6 +9,7 @@ import com.heartbeat.ping.config.properties.RetentionProperties;
 import com.heartbeat.ping.config.properties.SchedulerProperties;
 import com.heartbeat.ping.config.properties.SsrfProperties;
 import com.heartbeat.ping.config.properties.UptimeProperties;
+import com.heartbeat.ping.config.properties.WebhookProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -27,7 +28,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         SsrfProperties.class,
         UptimeProperties.class,
         AdminProperties.class,
-        RazorpayProperties.class
+        RazorpayProperties.class,
+        WebhookProperties.class
 })
 public class PingApplication {
 

@@ -94,4 +94,13 @@ public class Monitor extends BaseModel{
 
     @OneToMany(mappedBy = "monitor" , cascade = {CascadeType.ALL}, orphanRemoval = true)
     private List<MonitorLogs> monitorLogs;
+
+    /** Additional alert destinations (webhook/Slack/Discord) this monitor notifies besides email. */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "monitor_alert_channel",
+            joinColumns = @JoinColumn(name = "monitor_id"),
+            inverseJoinColumns = @JoinColumn(name = "channel_id"))
+    @Builder.Default
+    private Set<AlertChannel> alertChannels = new LinkedHashSet<>();
 }
