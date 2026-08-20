@@ -2,11 +2,14 @@ package com.heartbeat.ping.controller;
 
 import com.heartbeat.ping.dto.Error.ErrorResponse;
 import com.heartbeat.ping.service.PlanLimitExceededException;
+import com.heartbeat.ping.service.ResourceNotFoundException;
 import com.heartbeat.ping.service.billing.BillingException;
 import com.heartbeat.ping.service.billing.PaymentVerificationException;
 import com.heartbeat.ping.service.execution.ManualCheckThrottledException;
+import com.heartbeat.ping.service.security.RateLimitExceededException;
 import com.heartbeat.ping.service.security.SsrfValidationException;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -16,6 +19,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.LocalDateTime;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -86,6 +90,37 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         return build(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleRateLimit(
+            RateLimitExceededException ex,
+            HttpServletRequest request
+    ) {
+        return build(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNotFound(
+            ResourceNotFoundException ex,
+            HttpServletRequest request
+    ) {
+        return build(HttpStatus.NOT_FOUND, ex.getMessage(), request);
+    }
+
+    /**
+     * Catches anything not matched above — a bug, a third-party client error, a DB hiccup — so it
+     * never falls through to Spring's default error page. That default page can, depending on
+     * {@code server.error.*} settings, include the exception class name or a stack trace; callers
+     * only ever see a generic message, and the real exception is logged here for operators.
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleUnexpected(
+            Exception ex,
+            HttpServletRequest request
+    ) {
+        log.error("Unhandled exception on {} {}", request.getMethod(), request.getRequestURI(), ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", request);
     }
 
     private ResponseEntity<ErrorResponse> build(

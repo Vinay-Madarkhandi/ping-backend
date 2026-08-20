@@ -80,6 +80,10 @@ public class JwtService {
         return extractClaim(token, Claims::getExpiration);
     }
 
+    public Date extractIssuedAt(String token){
+        return extractClaim(token, Claims::getIssuedAt);
+    }
+
     public Key getSignKey() {
         return Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
     }

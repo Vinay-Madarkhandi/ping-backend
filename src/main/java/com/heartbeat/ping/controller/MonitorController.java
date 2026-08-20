@@ -16,6 +16,7 @@ import com.heartbeat.ping.modles.MonitorLogs;
 import com.heartbeat.ping.repository.UserRepository;
 import com.heartbeat.ping.service.MonitorAnalyticService;
 import com.heartbeat.ping.service.MonitorService;
+import com.heartbeat.ping.service.ResourceNotFoundException;
 import com.heartbeat.ping.service.execution.ManualCheckService;
 import com.heartbeat.ping.service.notification.AlertHistoryService;
 import com.heartbeat.ping.service.uptime.UptimeService;
@@ -126,7 +127,7 @@ public class MonitorController {
     ) {
         String email = authentication.getName();
         UUID userId = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"))
                 .getId();
 
         monitorService.deleteMonitor(monitorId, userId);
@@ -141,7 +142,7 @@ public class MonitorController {
     ) {
         String email = authentication.getName();
         UUID userId = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"))
                 .getId();
 
         monitorService.updateMonitor(monitorId, updateRequest, userId);
@@ -157,7 +158,7 @@ public class MonitorController {
         ) {
         String email = authentication.getName();
         UUID userId = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"))
                 .getId();
 
         Page<MonitorLogs> logs = monitorAnalyticService.getMonitorLogs(
@@ -179,7 +180,7 @@ public class MonitorController {
 
         String email = authentication.getName();
         UUID userId = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"))
                 .getId();
 
         MonitorStatusResponse statusResponse = monitorAnalyticService.getMonitorStatus(monitorId, userId);
@@ -228,7 +229,7 @@ public class MonitorController {
 
     private UUID currentUserId(Authentication authentication) {
         return userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new RuntimeException("User not found"))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"))
                 .getId();
     }
 }

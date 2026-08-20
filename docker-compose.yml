@@ -56,6 +56,10 @@ services:
       # --- Auth ---
       JWT_SECRET: ${JWT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      # This stack serves plain HTTP on localhost, so the Secure cookie attribute must be off here or
+      # browsers will silently refuse to store the auth cookie. Put a TLS terminator in front for any
+      # real deployment and leave this unset there (application.properties then defaults it to true).
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       # --- Billing (Razorpay): test vs live differ only by these env values ---
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}

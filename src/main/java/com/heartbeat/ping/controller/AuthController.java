@@ -13,6 +13,8 @@ import com.heartbeat.ping.service.AuthService;
 import com.heartbeat.ping.service.EmailVerificationService;
 import com.heartbeat.ping.service.JwtService;
 import com.heartbeat.ping.service.PasswordResetService;
+import com.heartbeat.ping.service.security.RateLimitExceededException;
+import com.heartbeat.ping.service.security.RateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -23,6 +25,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
+
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
@@ -30,24 +34,38 @@ public class AuthController {
     @Value("${cookie.expiry}")
     private int cookieExpiry;
 
+    @Value("${cookie.secure}")
+    private boolean cookieSecure;
+
+    @Value("${cookie.same-site}")
+    private String cookieSameSite;
+
     private final AuthService authService;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final PasswordResetService passwordResetService;
     private final EmailVerificationService emailVerificationService;
+    private final RateLimiter rateLimiter;
 
-    public AuthController(AuthService authService, AuthenticationManager authenticationManager, 
+    public AuthController(AuthService authService, AuthenticationManager authenticationManager,
                          JwtService jwtService, PasswordResetService passwordResetService,
-                         EmailVerificationService emailVerificationService) {
+                         EmailVerificationService emailVerificationService, RateLimiter rateLimiter) {
         this.authService = authService;
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
         this.passwordResetService = passwordResetService;
         this.emailVerificationService = emailVerificationService;
+        this.rateLimiter = rateLimiter;
     }
 
     @PostMapping("/signup/user")
-    public ResponseEntity<UserSignUpResponseDto> signUp(@RequestBody UserSignUpRequestDto userSignUpRequest){
+    public ResponseEntity<UserSignUpResponseDto> signUp(
+            @Valid @RequestBody UserSignUpRequestDto userSignUpRequest, HttpServletRequest request){
+        // Per-IP, not per-email: the email uniqueness check already bounds repeat signups for one
+        // target address, but nothing stops one caller from spamming account creation with fresh emails.
+        if (!rateLimiter.allow("signup:" + clientIp(request), 5, Duration.ofHours(1))) {
+            throw new RateLimitExceededException("Too many signup attempts. Please try again later.");
+        }
 
         UserSignUpResponseDto responseDto = authService.userSignUp(userSignUpRequest);
 
@@ -55,7 +73,14 @@ public class AuthController {
     }
 
     @PostMapping("/signin/user")
-    public ResponseEntity<AuthResponseDto> signIn(@RequestBody AuthRequestDto authRequestDto, HttpServletResponse response){
+    public ResponseEntity<AuthResponseDto> signIn(@Valid @RequestBody AuthRequestDto authRequestDto, HttpServletRequest request, HttpServletResponse response){
+        // Keyed by email (the primary brute-force target) and by IP (credential-stuffing across many
+        // accounts from one source). Either limit tripping blocks the attempt.
+        if (!rateLimiter.allow("signin:email:" + authRequestDto.getEmail().toLowerCase(), 8, Duration.ofMinutes(5))
+                || !rateLimiter.allow("signin:ip:" + clientIp(request), 30, Duration.ofMinutes(5))) {
+            throw new RateLimitExceededException("Too many sign-in attempts. Please try again later.");
+        }
+
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         authRequestDto.getEmail(),
@@ -65,14 +90,7 @@ public class AuthController {
 
         String token = jwtService.createToken(authRequestDto.getEmail());
 
-        ResponseCookie responseCookie = ResponseCookie.from("JwtToken",token)
-                    .httpOnly(true)
-                    .secure(false)
-                    .maxAge(cookieExpiry)
-                    .path("/")
-                    .build();
-
-        response.setHeader(HttpHeaders.SET_COOKIE ,responseCookie.toString());
+        response.setHeader(HttpHeaders.SET_COOKIE, jwtCookie(token, cookieExpiry).toString());
         return new ResponseEntity<>( new AuthResponseDto(true), HttpStatus.OK);
 
 
@@ -110,6 +128,11 @@ public class AuthController {
      */
     @PostMapping("/forgot-password")
     public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        // Without this, forgot-password is an unauthenticated mail-bomb vector against any registered
+        // address — each call would otherwise enqueue a fresh email with no cooldown.
+        if (!rateLimiter.allow("forgot-password:" + request.getEmail().toLowerCase(), 3, Duration.ofHours(1))) {
+            throw new RateLimitExceededException("Too many password reset requests. Please try again later.");
+        }
         passwordResetService.requestPasswordReset(request.getEmail());
         return ResponseEntity.ok().build();
     }
@@ -138,6 +161,9 @@ public class AuthController {
      */
     @PostMapping("/resend-verification")
     public ResponseEntity<Void> resendVerification(Authentication authentication) {
+        if (!rateLimiter.allow("resend-verification:" + authentication.getName(), 3, Duration.ofHours(1))) {
+            throw new RateLimitExceededException("Too many verification requests. Please try again later.");
+        }
         emailVerificationService.sendVerificationEmail(authentication.getName());
         return ResponseEntity.ok().build();
     }
@@ -156,13 +182,7 @@ public class AuthController {
         }
 
         // Clear the cookie
-        ResponseCookie cookie = ResponseCookie.from("JwtToken", "")
-                .httpOnly(true)
-                .secure(false)
-                .maxAge(0)
-                .path("/")
-                .build();
-        response.setHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        response.setHeader(HttpHeaders.SET_COOKIE, jwtCookie("", 0).toString());
 
         return ResponseEntity.ok().build();
     }
@@ -188,15 +208,20 @@ public class AuthController {
             jwtService.revokeToken(token);
         }
 
-        ResponseCookie cookie = ResponseCookie.from("JwtToken", "")
-                .httpOnly(true)
-                .secure(false)
-                .maxAge(0)
-                .path("/")
-                .build();
-        response.setHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        response.setHeader(HttpHeaders.SET_COOKIE, jwtCookie("", 0).toString());
 
         return ResponseEntity.noContent().build();
+    }
+
+    /** Builds the JwtToken cookie. maxAge 0 clears it (logout / account deletion). */
+    private ResponseCookie jwtCookie(String value, int maxAge) {
+        return ResponseCookie.from("JwtToken", value)
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite(cookieSameSite)
+                .maxAge(maxAge)
+                .path("/")
+                .build();
     }
 
     private String extractTokenFromCookie(HttpServletRequest request) {
@@ -209,6 +234,16 @@ public class AuthController {
             }
         }
         return null;
+    }
+
+    /**
+     * Best-effort caller IP for rate limiting. Deliberately does NOT trust X-Forwarded-For: without
+     * a configured trusted-proxy allowlist, honoring that header would let a caller spoof any IP and
+     * bypass the limit entirely. If this app moves behind a reverse proxy, wire Spring's
+     * ForwardedHeaderFilter with an explicit trusted-proxy list instead of reading the header here.
+     */
+    private String clientIp(HttpServletRequest request) {
+        return request.getRemoteAddr();
     }
 
 }

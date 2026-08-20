@@ -34,4 +34,17 @@ class JwtServiceTest {
         assertTrue(lifetimeMillis > Duration.ofHours(9).toMillis());
         assertTrue(jwtService.isValid(token));
     }
+
+    @Test
+    void extractIssuedAtReturnsCreationTime() {
+        long before = System.currentTimeMillis();
+        String token = jwtService.createToken("user@example.com");
+        long after = System.currentTimeMillis();
+
+        Date issuedAt = jwtService.extractIssuedAt(token);
+
+        // JWT 'iat' is second-precision, so allow a one-second margin on both sides.
+        assertTrue(issuedAt.getTime() >= before - 1000);
+        assertTrue(issuedAt.getTime() <= after + 1000);
+    }
 }
