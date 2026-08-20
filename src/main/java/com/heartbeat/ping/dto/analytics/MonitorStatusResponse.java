@@ -27,4 +27,8 @@ public class MonitorStatusResponse {
     private int totalDown;
     private LocalDateTime lastDowntimeAt;
     private LocalDateTime lastCheckedAt;
+    /** Null for HTTP monitors or before the first successful TLS handshake. */
+    private LocalDateTime sslCertExpiresAt;
+    /** Convenience for the UI; null whenever sslCertExpiresAt is null. Can be negative if expired. */
+    private Long sslDaysRemaining;
 }

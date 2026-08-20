@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -114,6 +115,8 @@ public class MonitorAnalyticService {
             displayState = currentState;
         }
 
+        LocalDateTime sslCertExpiresAt = status.getSslCertExpiresAt();
+
         return MonitorStatusResponse.builder()
                 .isUp(isUp)
                 .currentState(currentState)
@@ -125,6 +128,10 @@ public class MonitorAnalyticService {
                 .uptimePercentage(status.getUptimePercentage())
                 .lastDowntimeAt(status.getLastDowntimeAt())
                 .lastCheckedAt(status.getUpdatedAt())
+                .sslCertExpiresAt(sslCertExpiresAt)
+                .sslDaysRemaining(sslCertExpiresAt != null
+                        ? ChronoUnit.DAYS.between(LocalDateTime.now(), sslCertExpiresAt)
+                        : null)
                 .build();
     }
 }

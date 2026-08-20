@@ -31,4 +31,5 @@ public class MonitorListResponseDto {
     private int intervalMilliseconds;
     private int timeoutMilliseconds;
     private Set<String> tags;
+    private LocalDateTime sslCertExpiresAt;
 }

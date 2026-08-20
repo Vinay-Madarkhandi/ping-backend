@@ -83,7 +83,7 @@ public class MonitorController {
                 monitorService.getAllMonitorsByUserId(currentUserId(authentication));
 
         List<String> headers = List.of(
-                "Name", "URL", "Method", "Active", "State", "Uptime %", "Tags", "Created At"
+                "Name", "URL", "Method", "Active", "State", "Uptime %", "Tags", "SSL Expires", "Created At"
         );
         List<List<String>> rows = monitors.stream()
                 .map(m -> List.of(
@@ -94,6 +94,7 @@ public class MonitorController {
                         m.getDisplayState(),
                         String.format("%.2f", m.getUptimePercentage()),
                         m.getTags() == null ? "" : String.join(";", m.getTags()),
+                        m.getSslCertExpiresAt() != null ? m.getSslCertExpiresAt().toString() : "",
                         m.getCreatedAt() != null ? m.getCreatedAt().toString() : ""
                 ))
                 .toList();

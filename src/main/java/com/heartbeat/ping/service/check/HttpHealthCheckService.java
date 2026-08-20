@@ -17,6 +17,12 @@ import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.util.Timeout;
 import org.springframework.stereotype.Service;
 
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLSession;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
+import java.time.Instant;
+
 /**
  * Apache HttpClient 5 implementation of {@link HealthCheckService}. Uses the shared pooled
  * client, applying each monitor's timeout, redirect policy and custom headers per request,
@@ -45,12 +51,14 @@ public class HttpHealthCheckService implements HealthCheckService {
 
         long start = System.currentTimeMillis();
         try {
-            return httpClient.execute(request, context, response -> {
+            CheckResult result = httpClient.execute(request, context, response -> {
                 long elapsed = System.currentTimeMillis() - start;
                 int code = response.getCode();
                 String body = readBody(response.getEntity(), needBody);
                 return evaluate(spec, code, body, elapsed);
             });
+            Instant sslExpiresAt = extractSslExpiry(context);
+            return sslExpiresAt != null ? result.withSslExpiresAt(sslExpiresAt) : result;
         } catch (Exception ex) {
             long elapsed = System.currentTimeMillis() - start;
             log.warn("Monitor {} check failed: {}", spec.monitorId(), ex.getMessage());
@@ -119,5 +127,25 @@ public class HttpHealthCheckService implements HealthCheckService {
 
     private boolean statusMatches(int code, Integer expected) {
         return expected != null ? code == expected : (code >= 200 && code < 400);
+    }
+
+    /**
+     * Reads the leaf certificate's expiry off the TLS session this exchange already negotiated —
+     * no extra handshake or socket. Returns null for plain HTTP or when no session was captured.
+     */
+    private Instant extractSslExpiry(HttpClientContext context) {
+        SSLSession session = context.getSSLSession();
+        if (session == null) {
+            return null;
+        }
+        try {
+            Certificate[] certs = session.getPeerCertificates();
+            if (certs.length == 0 || !(certs[0] instanceof X509Certificate leaf)) {
+                return null;
+            }
+            return leaf.getNotAfter().toInstant();
+        } catch (SSLPeerUnverifiedException e) {
+            return null;
+        }
     }
 }

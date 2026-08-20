@@ -64,6 +64,44 @@ public class DefaultNotificationService implements NotificationService {
         }
     }
 
+    @Override
+    public void enqueueSslExpiryWarning(Monitor monitor, Instant expiresAt, long daysRemaining, Instant now) {
+        String recipient = recipientFor(monitor);
+        if (recipient == null) {
+            log.warn("No recipient for monitor {}; skipping SSL expiry warning", monitor.getId());
+            return;
+        }
+
+        String dedupeKey = "ssl-expiry:" + monitor.getId() + ":" + expiresAt.toEpochMilli();
+        if (outboxRepository.existsByDedupeKey(dedupeKey)) {
+            return; // already warned about this certificate
+        }
+
+        EmailOutbox email = EmailOutbox.builder()
+                .monitorId(monitor.getId())
+                .recipient(recipient)
+                .subject("[SSL] " + monitor.getName() + "'s certificate expires in " + daysRemaining + " days")
+                .body("""
+                        The TLS certificate for "%s" (%s) expires on %s (in %d days).
+
+                        Renew it before then to avoid an outage once the certificate lapses.
+                        """.formatted(monitor.getName(), monitor.getUrl(), expiresAt, daysRemaining))
+                .status(EmailStatus.PENDING)
+                .attempts(0)
+                .maxAttempts(emailProps.getMaxAttempts())
+                .nextAttemptAt(now)
+                .dedupeKey(dedupeKey)
+                .createdAt(now)
+                .build();
+
+        try {
+            outboxRepository.save(email);
+            metricsService.recordAlert("ssl_expiry");
+        } catch (DataIntegrityViolationException duplicate) {
+            log.debug("SSL expiry warning for monitor {} already enqueued", monitor.getId());
+        }
+    }
+
     private String recipientFor(Monitor monitor) {
         User user = monitor.getUser();
         return user != null ? user.getEmail() : null;

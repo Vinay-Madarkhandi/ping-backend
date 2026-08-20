@@ -318,6 +318,7 @@ public class MonitorService {
                 .intervalMilliseconds(monitor.getIntervalMilliseconds())
                 .timeoutMilliseconds(monitor.getTimeoutMilliseconds())
                 .tags(monitor.getTags())
+                .sslCertExpiresAt(status != null ? status.getSslCertExpiresAt() : null)
                 .build();
     }
 }
