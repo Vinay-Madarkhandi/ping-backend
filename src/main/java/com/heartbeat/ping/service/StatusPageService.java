@@ -18,6 +18,7 @@ import com.heartbeat.ping.service.uptime.UptimeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +48,7 @@ public class StatusPageService {
     private final MonitorStatusRepository monitorStatusRepository;
     private final UserRepository userRepository;
     private final UptimeService uptimeService;
+    private final BCryptPasswordEncoder passwordEncoder;
 
     @Transactional
     public StatusPageResponse create(String email, StatusPageRequest request) {
@@ -65,6 +67,8 @@ public class StatusPageService {
                 .slug(request.getSlug())
                 .title(request.getTitle())
                 .description(request.getDescription())
+                .logoUrl(validatedLogoUrl(request.getLogoUrl()))
+                .passwordHash(hashOrNull(request.getPassword()))
                 .monitors(resolveOwnedMonitors(user.getId(), request.getMonitorIds()))
                 .build();
 
@@ -84,9 +88,28 @@ public class StatusPageService {
         page.setSlug(request.getSlug());
         page.setTitle(request.getTitle());
         page.setDescription(request.getDescription());
+        page.setLogoUrl(validatedLogoUrl(request.getLogoUrl()));
         page.setMonitors(resolveOwnedMonitors(user.getId(), request.getMonitorIds()));
 
+        // null = leave the password as-is; "" = remove protection; anything else = set/replace it.
+        if (request.getPassword() != null) {
+            page.setPasswordHash(hashOrNull(request.getPassword()));
+        }
+
         return toResponse(page);
+    }
+
+    /** Verifies a password against a protected page and returns the same projection {@link #getPublic} would. */
+    @Transactional(readOnly = true)
+    public PublicStatusPageResponse unlockPublic(String slug, String password) {
+        StatusPage page = statusPageRepository.findBySlug(slug)
+                .orElseThrow(() -> new ResourceNotFoundException("Status page not found"));
+
+        if (page.getPasswordHash() != null && !passwordEncoder.matches(password, page.getPasswordHash())) {
+            throw StatusPagePasswordException.incorrect();
+        }
+
+        return buildPublicResponse(page);
     }
 
     @Transactional
@@ -118,6 +141,16 @@ public class StatusPageService {
         StatusPage page = statusPageRepository.findBySlug(slug)
                 .orElseThrow(() -> new ResourceNotFoundException("Status page not found"));
 
+        if (page.getPasswordHash() != null) {
+            throw StatusPagePasswordException.required();
+        }
+
+        return buildPublicResponse(page);
+    }
+
+    // ---- Private helpers ----
+
+    private PublicStatusPageResponse buildPublicResponse(StatusPage page) {
         List<PublicMonitorStatus> monitors = page.getMonitors().stream()
                 .filter(m -> m.getDeletedAt() == null)
                 .sorted(Comparator.comparing(Monitor::getName, String.CASE_INSENSITIVE_ORDER))
@@ -125,10 +158,27 @@ public class StatusPageService {
                 .toList();
 
         return new PublicStatusPageResponse(
-                page.getTitle(), page.getDescription(), overallStatus(monitors), monitors, Instant.now());
+                page.getTitle(), page.getDescription(), page.getLogoUrl(),
+                overallStatus(monitors), monitors, Instant.now());
     }
 
-    // ---- Private helpers ----
+    private String validatedLogoUrl(String logoUrl) {
+        if (logoUrl == null || logoUrl.isBlank()) {
+            return null;
+        }
+        String trimmed = logoUrl.trim();
+        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+            throw new IllegalArgumentException("Logo URL must start with http:// or https://");
+        }
+        return trimmed;
+    }
+
+    private String hashOrNull(String password) {
+        if (password == null || password.isBlank()) {
+            return null;
+        }
+        return passwordEncoder.encode(password);
+    }
 
     private PublicMonitorStatus toPublicMonitorStatus(Monitor monitor) {
         String state;
@@ -200,6 +250,7 @@ public class StatusPageService {
         List<StatusPageMonitorSummary> summaries = page.getMonitors().stream()
                 .map(m -> new StatusPageMonitorSummary(m.getId(), m.getName()))
                 .toList();
-        return new StatusPageResponse(page.getId(), page.getSlug(), page.getTitle(), page.getDescription(), summaries);
+        return new StatusPageResponse(page.getId(), page.getSlug(), page.getTitle(), page.getDescription(),
+                summaries, page.getLogoUrl(), page.getPasswordHash() != null);
     }
 }

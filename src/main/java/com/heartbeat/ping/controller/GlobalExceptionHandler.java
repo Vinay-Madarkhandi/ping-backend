@@ -3,6 +3,7 @@ package com.heartbeat.ping.controller;
 import com.heartbeat.ping.dto.Error.ErrorResponse;
 import com.heartbeat.ping.service.PlanLimitExceededException;
 import com.heartbeat.ping.service.ResourceNotFoundException;
+import com.heartbeat.ping.service.StatusPagePasswordException;
 import com.heartbeat.ping.service.billing.BillingException;
 import com.heartbeat.ping.service.billing.PaymentVerificationException;
 import com.heartbeat.ping.service.execution.ManualCheckThrottledException;
@@ -98,6 +99,15 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         return build(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request);
+    }
+
+    /** A password-protected status page was requested without a valid password. */
+    @ExceptionHandler(StatusPagePasswordException.class)
+    public ResponseEntity<ErrorResponse> handleStatusPagePassword(
+            StatusPagePasswordException ex,
+            HttpServletRequest request
+    ) {
+        return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)

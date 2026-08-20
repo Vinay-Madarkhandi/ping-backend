@@ -10,6 +10,7 @@ import java.util.List;
 public record PublicStatusPageResponse(
         String title,
         String description,
+        String logoUrl,
         String overallStatus,
         List<PublicMonitorStatus> monitors,
         Instant updatedAt

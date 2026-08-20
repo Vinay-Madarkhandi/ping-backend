@@ -9,6 +9,9 @@ public record StatusPageResponse(
         String slug,
         String title,
         String description,
-        List<StatusPageMonitorSummary> monitors
+        List<StatusPageMonitorSummary> monitors,
+        String logoUrl,
+        /** Whether a password is currently set. The hash itself is never returned. */
+        boolean passwordProtected
 ) {
 }
