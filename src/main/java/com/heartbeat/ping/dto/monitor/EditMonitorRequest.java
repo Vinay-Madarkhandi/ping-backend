@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Positive;
 import lombok.*;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Full replacement of a monitor's configuration ({@code PUT /api/v1/monitors/{id}}).
@@ -50,4 +51,7 @@ public class EditMonitorRequest {
 
     /** Whether the monitor should be scheduled. Defaults to leaving the current value untouched. */
     private Boolean active;
+
+    /** Free-form labels for grouping/filtering. Replaces the existing set; null/omitted clears them. */
+    private Set<String> tags;
 }

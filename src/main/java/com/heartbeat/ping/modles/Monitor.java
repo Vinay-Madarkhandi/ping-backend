@@ -7,8 +7,10 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -82,6 +84,13 @@ public class Monitor extends BaseModel{
 
     @ManyToOne(fetch = FetchType.LAZY)
     private User user;
+
+    /** Free-form labels for grouping/filtering (e.g. "prod", "api"). Not shown on public status pages. */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "monitor_tag", joinColumns = @JoinColumn(name = "monitor_id"))
+    @Column(name = "tag")
+    @Builder.Default
+    private Set<String> tags = new LinkedHashSet<>();
 
     @OneToMany(mappedBy = "monitor" , cascade = {CascadeType.ALL}, orphanRemoval = true)
     private List<MonitorLogs> monitorLogs;
