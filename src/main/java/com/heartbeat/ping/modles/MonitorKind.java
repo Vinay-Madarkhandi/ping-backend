@@ -7,5 +7,7 @@ package com.heartbeat.ping.modles;
  */
 public enum MonitorKind {
     HTTP,
-    HEARTBEAT
+    HEARTBEAT,
+    /** Raw TCP port reachability — no HTTP request, just "does a connection to host:port succeed". */
+    TCP
 }

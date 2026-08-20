@@ -39,4 +39,6 @@ public class MonitorListResponseDto {
     /** Only present for HEARTBEAT monitors. */
     private String heartbeatUrl;
     private int gracePeriodMilliseconds;
+    /** Only meaningful for TCP monitors. */
+    private Integer port;
 }

@@ -108,13 +108,26 @@ public class MonitorService {
                 monitor.getUser(), request.getIntervalMilliseconds(), request.getTimeoutMilliseconds());
 
         boolean urlChanged = false;
-        if (monitor.getKind() == MonitorKind.HEARTBEAT) {
+        MonitorKind kind = monitor.getKind();
+        if (kind == MonitorKind.HEARTBEAT) {
             int gracePeriodMs = request.getGracePeriodMilliseconds() != null
                     ? request.getGracePeriodMilliseconds() : monitor.getGracePeriodMilliseconds();
             if (gracePeriodMs < 0) {
                 throw new IllegalArgumentException("gracePeriodMilliseconds must not be negative");
             }
             monitor.setGracePeriodMilliseconds(gracePeriodMs);
+        } else if (kind == MonitorKind.TCP) {
+            if (request.getUrl() == null || request.getUrl().isBlank()) {
+                throw new IllegalArgumentException("host is required for TCP monitors");
+            }
+            String newHost = request.getUrl().trim();
+            int newPort = monitorMapper.validatePort(request.getPort());
+            urlChanged = !newHost.equals(monitor.getUrl()) || newPort != monitor.getPort();
+            if (urlChanged) {
+                urlSafetyValidator.validateHost(newHost);
+            }
+            monitor.setUrl(newHost);
+            monitor.setPort(newPort);
         } else {
             if (request.getUrl() == null || request.getUrl().isBlank()) {
                 throw new IllegalArgumentException("url is required for HTTP monitors");
@@ -272,7 +285,10 @@ public class MonitorService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        if (monitorMapper.parseKind(createMonitorRequestDto.getKind()) != MonitorKind.HEARTBEAT) {
+        MonitorKind kind = monitorMapper.parseKind(createMonitorRequestDto.getKind());
+        if (kind == MonitorKind.TCP) {
+            urlSafetyValidator.validateHost(createMonitorRequestDto.getUrl());
+        } else if (kind != MonitorKind.HEARTBEAT) {
             urlSafetyValidator.validate(createMonitorRequestDto.getUrl());
         }
         usageLimitService.validateNewMonitor(
@@ -339,6 +355,7 @@ public class MonitorService {
                 .kind(monitor.getKind())
                 .heartbeatUrl(monitorMapper.heartbeatUrlFor(monitor))
                 .gracePeriodMilliseconds(monitor.getGracePeriodMilliseconds())
+                .port(monitor.getPort())
                 .build();
     }
 }

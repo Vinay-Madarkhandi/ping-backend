@@ -24,9 +24,15 @@ public class Monitor extends BaseModel{
     @Column(nullable = false)
     private String name;
 
-    /** Null for {@code HEARTBEAT} monitors — there is nothing to probe, Ping is pinged instead. */
+    /**
+     * Null for {@code HEARTBEAT} monitors — there is nothing to probe, Ping is pinged instead.
+     * For {@code TCP} monitors this holds the bare hostname (no scheme) — see {@link #port}.
+     */
     @Column(length = 2048)
     private String url;
+
+    /** TCP monitors only: the port to connect to. Null for HTTP/HEARTBEAT. */
+    private Integer port;
 
     private int intervalMilliseconds;
 
@@ -122,8 +128,12 @@ public class Monitor extends BaseModel{
     @Builder.Default
     private Set<AlertChannel> alertChannels = new LinkedHashSet<>();
 
-    /** URL for HTTP monitors; a fixed label for HEARTBEAT monitors, which have none. Safe in templates. */
+    /** URL/host:port for HTTP/TCP monitors; a fixed label for HEARTBEAT monitors. Safe in templates. */
     public String getTargetLabel() {
-        return kind == MonitorKind.HEARTBEAT ? "heartbeat ping" : url;
+        return switch (kind) {
+            case HEARTBEAT -> "heartbeat ping";
+            case TCP -> url + ":" + port;
+            case HTTP -> url;
+        };
     }
 }

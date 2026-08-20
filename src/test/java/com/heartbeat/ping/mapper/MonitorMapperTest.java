@@ -117,6 +117,53 @@ class MonitorMapperTest {
     }
 
     @Test
+    void tcpMonitorRequiresAHostAndAValidPort() {
+        CreateMonitorRequestDto request = CreateMonitorRequestDto.builder()
+                .name("db")
+                .kind("TCP")
+                .url("db.internal")
+                .port(5432)
+                .intervalMilliseconds(60_000)
+                .timeoutMilliseconds(5_000)
+                .build();
+
+        Monitor monitor = mapper.toEntity(request);
+
+        assertEquals(MonitorKind.TCP, monitor.getKind());
+        assertEquals("db.internal", monitor.getUrl());
+        assertEquals(5432, monitor.getPort());
+        assertNull(monitor.getMonitorMethod());
+        assertNull(monitor.getHeartbeatToken());
+    }
+
+    @Test
+    void tcpMonitorRejectsMissingHost() {
+        CreateMonitorRequestDto request = CreateMonitorRequestDto.builder()
+                .name("db")
+                .kind("TCP")
+                .port(5432)
+                .intervalMilliseconds(60_000)
+                .timeoutMilliseconds(5_000)
+                .build();
+
+        assertThrows(IllegalArgumentException.class, () -> mapper.toEntity(request));
+    }
+
+    @Test
+    void tcpMonitorRejectsOutOfRangePort() {
+        CreateMonitorRequestDto request = CreateMonitorRequestDto.builder()
+                .name("db")
+                .kind("TCP")
+                .url("db.internal")
+                .port(70000)
+                .intervalMilliseconds(60_000)
+                .timeoutMilliseconds(5_000)
+                .build();
+
+        assertThrows(IllegalArgumentException.class, () -> mapper.toEntity(request));
+    }
+
+    @Test
     void rejectsNegativeGracePeriod() {
         CreateMonitorRequestDto request = CreateMonitorRequestDto.builder()
                 .name("job")

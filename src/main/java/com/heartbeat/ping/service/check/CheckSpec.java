@@ -21,6 +21,8 @@ public record CheckSpec(
         UUID userId,
         MonitorKind kind,
         String url,
+        /** TCP monitors only. */
+        Integer port,
         MonitorMethod method,
         int timeoutMillis,
         Integer expectedStatusCode,
@@ -36,6 +38,7 @@ public record CheckSpec(
                 monitor.getUser() != null ? monitor.getUser().getId() : null,
                 monitor.getKind() != null ? monitor.getKind() : MonitorKind.HTTP,
                 monitor.getUrl(),
+                monitor.getPort(),
                 monitor.getMonitorMethod() != null ? monitor.getMonitorMethod() : MonitorMethod.GET,
                 monitor.getTimeoutMilliseconds(),
                 monitor.getExpectedStatusCode(),

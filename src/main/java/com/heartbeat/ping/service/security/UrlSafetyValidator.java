@@ -7,4 +7,7 @@ package com.heartbeat.ping.service.security;
 public interface UrlSafetyValidator {
 
     void validate(String url);
+
+    /** Same policy as {@link #validate}, for a bare hostname with no scheme (TCP monitors). */
+    void validateHost(String host);
 }

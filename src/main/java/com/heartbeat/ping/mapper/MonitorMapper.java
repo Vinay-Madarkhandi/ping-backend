@@ -35,9 +35,11 @@ public class MonitorMapper {
 
         MonitorKind kind = parseKind(monitorRequestDto.getKind());
         boolean heartbeat = kind == MonitorKind.HEARTBEAT;
+        boolean tcp = kind == MonitorKind.TCP;
 
         if (!heartbeat && (monitorRequestDto.getUrl() == null || monitorRequestDto.getUrl().isBlank())) {
-            throw new IllegalArgumentException("url is required for HTTP monitors");
+            throw new IllegalArgumentException(
+                    tcp ? "host is required for TCP monitors" : "url is required for HTTP monitors");
         }
 
         int gracePeriodMs = monitorRequestDto.getGracePeriodMilliseconds() != null
@@ -46,20 +48,23 @@ public class MonitorMapper {
             throw new IllegalArgumentException("gracePeriodMilliseconds must not be negative");
         }
 
+        Integer port = tcp ? validatePort(monitorRequestDto.getPort()) : null;
+
         return Monitor.builder()
                 .name(monitorRequestDto.getName())
                 .url(heartbeat ? null : monitorRequestDto.getUrl())
+                .port(port)
                 .intervalMilliseconds(monitorRequestDto.getIntervalMilliseconds())
                 .timeoutMilliseconds(monitorRequestDto.getTimeoutMilliseconds())
                 .isActive(true)
-                .monitorMethod(heartbeat ? null : parseMethod(monitorRequestDto.getMonitorMethod()))
+                .monitorMethod(heartbeat || tcp ? null : parseMethod(monitorRequestDto.getMonitorMethod()))
                 .kind(kind)
                 .heartbeatToken(heartbeat ? newHeartbeatToken() : null)
                 .gracePeriodMilliseconds(heartbeat ? gracePeriodMs : 0)
-                .expectedStatusCode(heartbeat ? null : monitorRequestDto.getExpectedStatusCode())
-                .keyword(heartbeat ? null : monitorRequestDto.getKeyword())
+                .expectedStatusCode(heartbeat || tcp ? null : monitorRequestDto.getExpectedStatusCode())
+                .keyword(heartbeat || tcp ? null : monitorRequestDto.getKeyword())
                 .followRedirects(monitorRequestDto.getFollowRedirects() == null || monitorRequestDto.getFollowRedirects())
-                .customHeaders(heartbeat ? null : monitorRequestDto.getCustomHeaders())
+                .customHeaders(heartbeat || tcp ? null : monitorRequestDto.getCustomHeaders())
                 .tags(normalizeTags(monitorRequestDto.getTags()))
                 .nextCheckAt(Instant.now())
                 .build();
@@ -73,8 +78,19 @@ public class MonitorMapper {
         try {
             return MonitorKind.valueOf(kind.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("kind must be HTTP or HEARTBEAT");
+            throw new IllegalArgumentException("kind must be HTTP, HEARTBEAT, or TCP");
         }
+    }
+
+    /** Validates a TCP monitor's port. Public so edits reuse identical validation to creation. */
+    public Integer validatePort(Integer port) {
+        if (port == null) {
+            throw new IllegalArgumentException("port is required for TCP monitors");
+        }
+        if (port < 1 || port > 65535) {
+            throw new IllegalArgumentException("port must be between 1 and 65535");
+        }
+        return port;
     }
 
     private String newHeartbeatToken() {

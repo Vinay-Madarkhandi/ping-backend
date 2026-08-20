@@ -29,11 +29,14 @@ public class CreateMonitorRequestDto {
 
     private String monitorMethod;
 
-    /** "HTTP" (default) or "HEARTBEAT". Immutable after creation. */
+    /** "HTTP" (default), "HEARTBEAT", or "TCP". Immutable after creation. */
     private String kind;
 
     /** HEARTBEAT only: extra time past the interval before a missed ping counts as DOWN. */
     private Integer gracePeriodMilliseconds;
+
+    /** TCP only: the port to connect to. */
+    private Integer port;
 
     // ---- Optional check configuration ----
 

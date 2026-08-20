@@ -4,6 +4,7 @@ import com.heartbeat.ping.modles.MonitorKind;
 import com.heartbeat.ping.service.check.CheckResult;
 import com.heartbeat.ping.service.check.CheckSpec;
 import com.heartbeat.ping.service.check.HealthCheckService;
+import com.heartbeat.ping.service.check.TcpHealthCheckService;
 import com.heartbeat.ping.service.metrics.MetricsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +31,7 @@ public class MonitorCheckRunner {
 
     private final MonitorCheckTransactionService transactionService;
     private final HealthCheckService healthCheckService;
+    private final TcpHealthCheckService tcpHealthCheckService;
     private final MetricsService metricsService;
 
     public void run(UUID monitorId) {
@@ -46,9 +48,11 @@ public class MonitorCheckRunner {
             return Optional.empty(); // deleted between claim and execution
         }
 
-        CheckResult result = spec.get().kind() == MonitorKind.HEARTBEAT
-                ? CheckResult.down(0, 0, "No heartbeat ping received within the expected window")
-                : healthCheckService.check(spec.get());
+        CheckResult result = switch (spec.get().kind()) {
+            case HEARTBEAT -> CheckResult.down(0, 0, "No heartbeat ping received within the expected window");
+            case TCP -> tcpHealthCheckService.check(spec.get());
+            case HTTP -> healthCheckService.check(spec.get());
+        };
         transactionService.recordResult(monitorId, spec.get().userId(), result);
         metricsService.recordCheck(result.outcome(), result.responseTimeMs());
         return Optional.of(result);
