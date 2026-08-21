@@ -18,7 +18,7 @@ public class CreateMonitorRequestDto {
     @NotBlank
     private String name;
 
-    @NotBlank
+    /** Required for HTTP monitors; ignored (and left unset) for HEARTBEAT monitors. */
     private String url;
 
     @Positive
@@ -28,6 +28,15 @@ public class CreateMonitorRequestDto {
     private int timeoutMilliseconds;
 
     private String monitorMethod;
+
+    /** "HTTP" (default), "HEARTBEAT", or "TCP". Immutable after creation. */
+    private String kind;
+
+    /** HEARTBEAT only: extra time past the interval before a missed ping counts as DOWN. */
+    private Integer gracePeriodMilliseconds;
+
+    /** TCP only: the port to connect to. */
+    private Integer port;
 
     // ---- Optional check configuration ----
 

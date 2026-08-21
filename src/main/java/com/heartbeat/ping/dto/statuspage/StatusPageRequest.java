@@ -29,4 +29,16 @@ public class StatusPageRequest {
 
     @NotEmpty(message = "Select at least one monitor")
     private List<UUID> monitorIds;
+
+    /** Optional logo image URL. Must be http(s) if provided. */
+    @Size(max = 2048, message = "Logo URL must be at most 2048 characters")
+    private String logoUrl;
+
+    /**
+     * Optional access password (plain text in transit over HTTPS, hashed before storage).
+     * {@code null} leaves the page's current password setting unchanged; an empty string removes
+     * password protection; any other non-blank value sets/replaces the password.
+     */
+    @Size(max = 100, message = "Password must be at most 100 characters")
+    private String password;
 }

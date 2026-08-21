@@ -21,4 +21,9 @@ public class CreateMonitorResponseDto {
 
     private LocalDateTime createdAt;
 
+    private String kind;
+
+    /** The URL to ping. Present only for HEARTBEAT monitors; also available later via the monitor detail DTO. */
+    private String heartbeatUrl;
+
 }

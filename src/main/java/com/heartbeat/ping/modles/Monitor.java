@@ -24,8 +24,15 @@ public class Monitor extends BaseModel{
     @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false, length = 2048)
+    /**
+     * Null for {@code HEARTBEAT} monitors — there is nothing to probe, Ping is pinged instead.
+     * For {@code TCP} monitors this holds the bare hostname (no scheme) — see {@link #port}.
+     */
+    @Column(length = 2048)
     private String url;
+
+    /** TCP monitors only: the port to connect to. Null for HTTP/HEARTBEAT. */
+    private Integer port;
 
     private int intervalMilliseconds;
 
@@ -62,6 +69,23 @@ public class Monitor extends BaseModel{
     @Enumerated(value = EnumType.STRING)
     private MonitorMethod monitorMethod;
 
+    /** HTTP (probe-based, default) or HEARTBEAT (external job pings Ping). Immutable after creation. */
+    @Enumerated(value = EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private MonitorKind kind = MonitorKind.HTTP;
+
+    /** Unguessable id an external job pings at {@code /api/v1/public/heartbeat/{token}}. HEARTBEAT only. */
+    @Column(name = "heartbeat_token", unique = true, length = 64)
+    private String heartbeatToken;
+
+    /**
+     * Extra time allowed past {@code intervalMilliseconds} before a HEARTBEAT monitor is marked DOWN
+     * for a missed ping — absorbs normal job-runtime jitter without a false alert. Unused for HTTP.
+     */
+    @Builder.Default
+    private int gracePeriodMilliseconds = 0;
+
     /** Optimistic-lock guard so a leased monitor cannot be double-executed. */
     @Version
     @Builder.Default
@@ -94,4 +118,22 @@ public class Monitor extends BaseModel{
 
     @OneToMany(mappedBy = "monitor" , cascade = {CascadeType.ALL}, orphanRemoval = true)
     private List<MonitorLogs> monitorLogs;
+
+    /** Additional alert destinations (webhook/Slack/Discord) this monitor notifies besides email. */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "monitor_alert_channel",
+            joinColumns = @JoinColumn(name = "monitor_id"),
+            inverseJoinColumns = @JoinColumn(name = "channel_id"))
+    @Builder.Default
+    private Set<AlertChannel> alertChannels = new LinkedHashSet<>();
+
+    /** URL/host:port for HTTP/TCP monitors; a fixed label for HEARTBEAT monitors. Safe in templates. */
+    public String getTargetLabel() {
+        return switch (kind) {
+            case HEARTBEAT -> "heartbeat ping";
+            case TCP -> url + ":" + port;
+            case HTTP -> url;
+        };
+    }
 }

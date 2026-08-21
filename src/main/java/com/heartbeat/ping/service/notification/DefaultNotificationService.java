@@ -1,12 +1,17 @@
 package com.heartbeat.ping.service.notification;
 
 import com.heartbeat.ping.config.properties.EmailProperties;
+import com.heartbeat.ping.config.properties.WebhookProperties;
+import com.heartbeat.ping.modles.AlertChannel;
 import com.heartbeat.ping.modles.EmailOutbox;
 import com.heartbeat.ping.modles.EmailStatus;
 import com.heartbeat.ping.modles.Incident;
 import com.heartbeat.ping.modles.Monitor;
 import com.heartbeat.ping.modles.User;
+import com.heartbeat.ping.modles.WebhookOutbox;
+import com.heartbeat.ping.modles.WebhookStatus;
 import com.heartbeat.ping.repository.EmailOutboxRepository;
+import com.heartbeat.ping.repository.WebhookOutboxRepository;
 import com.heartbeat.ping.service.metrics.MetricsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,15 +33,22 @@ public class DefaultNotificationService implements NotificationService {
     private final EmailOutboxRepository outboxRepository;
     private final EmailProperties emailProps;
     private final MetricsService metricsService;
+    private final WebhookOutboxRepository webhookOutboxRepository;
+    private final WebhookProperties webhookProps;
+    private final WebhookPayloadBuilder webhookPayloadBuilder;
 
     @Override
     public void enqueue(Monitor monitor, Incident incident, AlertType type, Instant now) {
         String recipient = recipientFor(monitor);
         if (recipient == null) {
             log.warn("No recipient for monitor {}; skipping {} alert", monitor.getId(), type);
-            return;
+        } else {
+            enqueueEmail(monitor, incident, type, now, recipient);
         }
+        enqueueWebhooks(monitor, incident, type, now);
+    }
 
+    private void enqueueEmail(Monitor monitor, Incident incident, AlertType type, Instant now, String recipient) {
         String dedupeKey = incident.getId() + ":" + type.name();
         if (outboxRepository.existsByDedupeKey(dedupeKey)) {
             return; // already enqueued for this transition
@@ -61,6 +73,42 @@ public class DefaultNotificationService implements NotificationService {
         } catch (DataIntegrityViolationException duplicate) {
             // Lost the race on the unique dedupe key — another transition already enqueued it.
             log.debug("Alert {} for incident {} already enqueued", type, incident.getId());
+        }
+    }
+
+    /** Fans the same transition out to every active channel this monitor has opted into. */
+    private void enqueueWebhooks(Monitor monitor, Incident incident, AlertType type, Instant now) {
+        for (AlertChannel channel : monitor.getAlertChannels()) {
+            if (!channel.isActive()) {
+                continue;
+            }
+            String dedupeKey = incident.getId() + ":" + type.name() + ":" + channel.getId();
+            if (webhookOutboxRepository.existsByDedupeKey(dedupeKey)) {
+                continue;
+            }
+
+            String payload = webhookPayloadBuilder.build(channel.getType(), monitor, incident, type);
+            WebhookOutbox webhook = WebhookOutbox.builder()
+                    .monitorId(monitor.getId())
+                    .channelId(channel.getId())
+                    .targetUrl(channel.getTargetUrl())
+                    .channelType(channel.getType())
+                    .payload(payload)
+                    .status(WebhookStatus.PENDING)
+                    .attempts(0)
+                    .maxAttempts(webhookProps.getMaxAttempts())
+                    .nextAttemptAt(now)
+                    .dedupeKey(dedupeKey)
+                    .createdAt(now)
+                    .build();
+
+            try {
+                webhookOutboxRepository.save(webhook);
+                metricsService.recordAlert("webhook_" + type.name().toLowerCase(Locale.ROOT));
+            } catch (DataIntegrityViolationException duplicate) {
+                log.debug("Webhook alert {} for incident {} channel {} already enqueued",
+                        type, incident.getId(), channel.getId());
+            }
         }
     }
 
@@ -120,14 +168,14 @@ public class DefaultNotificationService implements NotificationService {
                     Monitor "%s" (%s) is DOWN.
                     Since: %s
                     Reason: %s
-                    """.formatted(monitor.getName(), monitor.getUrl(), incident.getStartedAt(),
+                    """.formatted(monitor.getName(), monitor.getTargetLabel(), incident.getStartedAt(),
                     incident.getFailureReason() == null ? "unknown" : incident.getFailureReason());
             case RECOVERY -> """
                     Monitor "%s" (%s) has RECOVERED.
                     Down from: %s
                     Recovered at: %s
                     Downtime: %s seconds
-                    """.formatted(monitor.getName(), monitor.getUrl(), incident.getStartedAt(),
+                    """.formatted(monitor.getName(), monitor.getTargetLabel(), incident.getStartedAt(),
                     incident.getResolvedAt(), incident.getDurationSeconds());
         };
     }

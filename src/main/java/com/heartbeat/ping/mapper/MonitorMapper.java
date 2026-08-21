@@ -3,19 +3,26 @@ package com.heartbeat.ping.mapper;
 import com.heartbeat.ping.dto.monitor.CreateMonitorRequestDto;
 import com.heartbeat.ping.dto.monitor.CreateMonitorResponseDto;
 import com.heartbeat.ping.modles.Monitor;
+import com.heartbeat.ping.modles.MonitorKind;
 import com.heartbeat.ping.modles.MonitorMethod;
+import com.heartbeat.ping.service.execution.HeartbeatUrlBuilder;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 
 @Component
+@RequiredArgsConstructor
 public class MonitorMapper {
 
     private static final int MAX_TAGS = 10;
     private static final int MAX_TAG_LENGTH = 30;
+
+    private final HeartbeatUrlBuilder heartbeatUrlBuilder;
 
     public Monitor toEntity(CreateMonitorRequestDto monitorRequestDto){
         if (monitorRequestDto.getIntervalMilliseconds() <= 0) {
@@ -26,20 +33,74 @@ public class MonitorMapper {
             throw new IllegalArgumentException("timeoutMilliseconds must be greater than 0");
         }
 
+        MonitorKind kind = parseKind(monitorRequestDto.getKind());
+        boolean heartbeat = kind == MonitorKind.HEARTBEAT;
+        boolean tcp = kind == MonitorKind.TCP;
+
+        if (!heartbeat && (monitorRequestDto.getUrl() == null || monitorRequestDto.getUrl().isBlank())) {
+            throw new IllegalArgumentException(
+                    tcp ? "host is required for TCP monitors" : "url is required for HTTP monitors");
+        }
+
+        int gracePeriodMs = monitorRequestDto.getGracePeriodMilliseconds() != null
+                ? monitorRequestDto.getGracePeriodMilliseconds() : 0;
+        if (gracePeriodMs < 0) {
+            throw new IllegalArgumentException("gracePeriodMilliseconds must not be negative");
+        }
+
+        Integer port = tcp ? validatePort(monitorRequestDto.getPort()) : null;
+
         return Monitor.builder()
                 .name(monitorRequestDto.getName())
-                .url(monitorRequestDto.getUrl())
+                .url(heartbeat ? null : monitorRequestDto.getUrl())
+                .port(port)
                 .intervalMilliseconds(monitorRequestDto.getIntervalMilliseconds())
                 .timeoutMilliseconds(monitorRequestDto.getTimeoutMilliseconds())
                 .isActive(true)
-                .monitorMethod(parseMethod(monitorRequestDto.getMonitorMethod()))
-                .expectedStatusCode(monitorRequestDto.getExpectedStatusCode())
-                .keyword(monitorRequestDto.getKeyword())
+                .monitorMethod(heartbeat || tcp ? null : parseMethod(monitorRequestDto.getMonitorMethod()))
+                .kind(kind)
+                .heartbeatToken(heartbeat ? newHeartbeatToken() : null)
+                .gracePeriodMilliseconds(heartbeat ? gracePeriodMs : 0)
+                .expectedStatusCode(heartbeat || tcp ? null : monitorRequestDto.getExpectedStatusCode())
+                .keyword(heartbeat || tcp ? null : monitorRequestDto.getKeyword())
                 .followRedirects(monitorRequestDto.getFollowRedirects() == null || monitorRequestDto.getFollowRedirects())
-                .customHeaders(monitorRequestDto.getCustomHeaders())
+                .customHeaders(heartbeat || tcp ? null : monitorRequestDto.getCustomHeaders())
                 .tags(normalizeTags(monitorRequestDto.getTags()))
                 .nextCheckAt(Instant.now())
                 .build();
+    }
+
+    /** Parses the monitor kind, defaulting to HTTP. Public so edits could reuse it if kind ever becomes editable. */
+    public MonitorKind parseKind(String kind) {
+        if (kind == null || kind.isBlank()) {
+            return MonitorKind.HTTP;
+        }
+        try {
+            return MonitorKind.valueOf(kind.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("kind must be HTTP, HEARTBEAT, or TCP");
+        }
+    }
+
+    /** Validates a TCP monitor's port. Public so edits reuse identical validation to creation. */
+    public Integer validatePort(Integer port) {
+        if (port == null) {
+            throw new IllegalArgumentException("port is required for TCP monitors");
+        }
+        if (port < 1 || port > 65535) {
+            throw new IllegalArgumentException("port must be between 1 and 65535");
+        }
+        return port;
+    }
+
+    private String newHeartbeatToken() {
+        return UUID.randomUUID().toString().replace("-", "");
+    }
+
+    public String heartbeatUrlFor(Monitor monitor) {
+        return monitor.getKind() == MonitorKind.HEARTBEAT && monitor.getHeartbeatToken() != null
+                ? heartbeatUrlBuilder.urlFor(monitor.getHeartbeatToken())
+                : null;
     }
 
     /**
@@ -92,6 +153,8 @@ public class MonitorMapper {
                 .url(monitor.getUrl())
                 .isActive(monitor.isActive())
                 .createdAt(monitor.getCreatedAt())
+                .kind(monitor.getKind().name())
+                .heartbeatUrl(heartbeatUrlFor(monitor))
                 .build();
     }
 }

@@ -46,6 +46,21 @@ public class SsrfGuard implements UrlSafetyValidator {
             throw new SsrfValidationException("URL host is missing");
         }
 
+        checkHost(host);
+    }
+
+    @Override
+    public void validateHost(String host) {
+        if (!props.isEnabled()) {
+            return;
+        }
+        if (host == null || host.isBlank()) {
+            throw new SsrfValidationException("Host is missing");
+        }
+        checkHost(host);
+    }
+
+    private void checkHost(String host) {
         if (props.isAllowPrivate()) {
             return; // dev/test escape hatch
         }

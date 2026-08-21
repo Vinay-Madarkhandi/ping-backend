@@ -88,7 +88,7 @@ public class MonitorController {
         List<List<String>> rows = monitors.stream()
                 .map(m -> List.of(
                         m.getName(),
-                        m.getUrl(),
+                        m.getUrl() != null ? m.getUrl() : "",
                         m.getMethod() != null ? m.getMethod().name() : "",
                         String.valueOf(m.isActive()),
                         m.getDisplayState(),

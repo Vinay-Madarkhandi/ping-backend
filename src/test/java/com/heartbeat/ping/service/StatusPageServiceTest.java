@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.time.Instant;
 import java.util.List;
@@ -42,11 +43,12 @@ class StatusPageServiceTest {
 
     private StatusPageService service;
     private User owner;
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @BeforeEach
     void setUp() {
-        service = new StatusPageService(
-                statusPageRepository, monitorRepository, monitorStatusRepository, userRepository, uptimeService);
+        service = new StatusPageService(statusPageRepository, monitorRepository, monitorStatusRepository,
+                userRepository, uptimeService, passwordEncoder);
         owner = User.builder().userName("jane").email("jane@example.com").build();
         owner.setId(UUID.randomUUID());
     }
@@ -181,6 +183,96 @@ class StatusPageServiceTest {
 
         assertThatThrownBy(() -> service.getPublic("missing"))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void createRejectsALogoUrlWithoutAnHttpScheme() {
+        Monitor mine = monitor("api", owner.getId(), false, false);
+        when(userRepository.findByEmail(owner.getEmail())).thenReturn(Optional.of(owner));
+
+        StatusPageRequest request = request("Status", "status", List.of(mine.getId()));
+        request.setLogoUrl("javascript:alert(1)");
+
+        assertThatThrownBy(() -> service.create(owner.getEmail(), request))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void createHashesThePasswordRatherThanStoringItInTheClear() {
+        Monitor mine = monitor("api", owner.getId(), false, false);
+        when(userRepository.findByEmail(owner.getEmail())).thenReturn(Optional.of(owner));
+        when(monitorRepository.findAllById(List.of(mine.getId()))).thenReturn(List.of(mine));
+        when(statusPageRepository.save(any(StatusPage.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        StatusPageRequest request = request("Status", "status", List.of(mine.getId()));
+        request.setPassword("hunter2");
+
+        StatusPageResponse response = service.create(owner.getEmail(), request);
+
+        assertThat(response.passwordProtected()).isTrue();
+    }
+
+    @Test
+    void updateWithNullPasswordLeavesTheExistingPasswordUnchanged() {
+        StatusPage page = StatusPage.builder().slug("acme").title("Acme")
+                .passwordHash(passwordEncoder.encode("original")).monitors(List.of()).build();
+        page.setId(UUID.randomUUID());
+        when(userRepository.findByEmail(owner.getEmail())).thenReturn(Optional.of(owner));
+        when(statusPageRepository.findByIdAndUser_Id(page.getId(), owner.getId())).thenReturn(Optional.of(page));
+
+        StatusPageRequest request = request("Acme", "acme", List.of()); // password left null
+
+        service.update(owner.getEmail(), page.getId(), request);
+
+        assertThat(passwordEncoder.matches("original", page.getPasswordHash())).isTrue();
+    }
+
+    @Test
+    void updateWithBlankPasswordRemovesProtection() {
+        StatusPage page = StatusPage.builder().slug("acme").title("Acme")
+                .passwordHash(passwordEncoder.encode("original")).monitors(List.of()).build();
+        page.setId(UUID.randomUUID());
+        when(userRepository.findByEmail(owner.getEmail())).thenReturn(Optional.of(owner));
+        when(statusPageRepository.findByIdAndUser_Id(page.getId(), owner.getId())).thenReturn(Optional.of(page));
+
+        StatusPageRequest request = request("Acme", "acme", List.of());
+        request.setPassword("");
+
+        StatusPageResponse response = service.update(owner.getEmail(), page.getId(), request);
+
+        assertThat(response.passwordProtected()).isFalse();
+        assertThat(page.getPasswordHash()).isNull();
+    }
+
+    @Test
+    void getPublicThrowsPasswordRequiredForAProtectedPage() {
+        StatusPage page = StatusPage.builder().slug("acme").title("Acme")
+                .passwordHash(passwordEncoder.encode("secret")).monitors(List.of()).build();
+        when(statusPageRepository.findBySlug("acme")).thenReturn(Optional.of(page));
+
+        assertThatThrownBy(() -> service.getPublic("acme"))
+                .isInstanceOf(StatusPagePasswordException.class);
+    }
+
+    @Test
+    void unlockPublicSucceedsWithTheCorrectPassword() {
+        StatusPage page = StatusPage.builder().slug("acme").title("Acme")
+                .passwordHash(passwordEncoder.encode("secret")).monitors(List.of()).build();
+        when(statusPageRepository.findBySlug("acme")).thenReturn(Optional.of(page));
+
+        PublicStatusPageResponse response = service.unlockPublic("acme", "secret");
+
+        assertThat(response.title()).isEqualTo("Acme");
+    }
+
+    @Test
+    void unlockPublicRejectsAnIncorrectPassword() {
+        StatusPage page = StatusPage.builder().slug("acme").title("Acme")
+                .passwordHash(passwordEncoder.encode("secret")).monitors(List.of()).build();
+        when(statusPageRepository.findBySlug("acme")).thenReturn(Optional.of(page));
+
+        assertThatThrownBy(() -> service.unlockPublic("acme", "wrong"))
+                .isInstanceOf(StatusPagePasswordException.class);
     }
 
     @Test

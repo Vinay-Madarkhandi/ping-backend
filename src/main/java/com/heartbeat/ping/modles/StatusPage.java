@@ -34,6 +34,14 @@ public class StatusPage extends BaseModel {
     @Column(length = 1000)
     private String description;
 
+    /** Optional logo image shown at the top of the public page. Just an <img> src — never fetched server-side. */
+    @Column(name = "logo_url", length = 2048)
+    private String logoUrl;
+
+    /** BCrypt hash of an optional access password; null means the page is open to anyone with the link. */
+    @Column(name = "password_hash", length = 255)
+    private String passwordHash;
+
     @ManyToMany
     @JoinTable(
             name = "status_page_monitor",

@@ -36,6 +36,9 @@ public interface MonitorRepository extends JpaRepository<Monitor, UUID> {
 
     Optional<Monitor> findByIdAndUser_Id(UUID monitorId, UUID userId);
 
+    /** Looks up a HEARTBEAT monitor by its unguessable ping token. Archived monitors never match. */
+    Optional<Monitor> findByHeartbeatTokenAndDeletedAtIsNull(String heartbeatToken);
+
     /** Number of active (non-archived) monitors a user owns — enforces the plan's max-monitors limit. */
     long countByUser_IdAndDeletedAtIsNull(UUID userId);
 
