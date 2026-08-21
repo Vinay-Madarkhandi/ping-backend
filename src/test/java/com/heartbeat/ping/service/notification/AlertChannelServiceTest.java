@@ -10,6 +10,7 @@ import com.heartbeat.ping.repository.AlertChannelRepository;
 import com.heartbeat.ping.repository.MonitorRepository;
 import com.heartbeat.ping.repository.UserRepository;
 import com.heartbeat.ping.service.notification.AlertChannelService.AlertChannelTestResult;
+import com.heartbeat.ping.service.security.RateLimiter;
 import com.heartbeat.ping.service.security.UrlSafetyValidator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,7 +57,7 @@ class AlertChannelServiceTest {
     private AlertChannelService service() {
         return new AlertChannelService(
                 channelRepository, monitorRepository, userRepository, urlSafetyValidator,
-                webhookDeliveryService, webhookPayloadBuilder);
+                webhookDeliveryService, webhookPayloadBuilder, new RateLimiter());
     }
 
     private final UUID userId = UUID.randomUUID();
@@ -154,5 +155,27 @@ class AlertChannelServiceTest {
         AlertChannelTestResult result = service().test(channelId, userId);
 
         assertFalse(result.success());
+    }
+
+    @Test
+    void testSendIsRateLimitedPerUser() {
+        UUID channelId = UUID.randomUUID();
+        AlertChannel channel = AlertChannel.builder()
+                .type(AlertChannelType.WEBHOOK)
+                .name("x")
+                .targetUrl("https://example.com/hook")
+                .active(true)
+                .build();
+        channel.setId(channelId);
+        when(channelRepository.findByIdAndUser_Id(channelId, userId)).thenReturn(Optional.of(channel));
+        when(webhookPayloadBuilder.buildTestPayload(eq(AlertChannelType.WEBHOOK), anyString())).thenReturn("{}");
+
+        AlertChannelService service = service();
+        for (int i = 0; i < 20; i++) {
+            service.test(channelId, userId);
+        }
+
+        assertThrows(com.heartbeat.ping.service.security.RateLimitExceededException.class,
+                () -> service.test(channelId, userId));
     }
 }

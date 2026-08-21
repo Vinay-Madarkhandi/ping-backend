@@ -34,4 +34,22 @@ class CsvWriterTest {
 
         assertEquals("A\r\n\r\n", csv);
     }
+
+    @Test
+    void neutralizesFormulaTriggeringFields() {
+        String csv = CsvWriter.write(
+                List.of("Name"),
+                List.of(
+                        List.of("=cmd|'/c calc'!A1"),
+                        List.of("+1+1"),
+                        List.of("-1"),
+                        List.of("@SUM(A1)"),
+                        List.of("normal-name")
+                )
+        );
+
+        assertEquals(
+                "Name\r\n'=cmd|'/c calc'!A1\r\n'+1+1\r\n'-1\r\n'@SUM(A1)\r\nnormal-name\r\n",
+                csv);
+    }
 }

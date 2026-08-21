@@ -49,6 +49,7 @@ public class StatusPageService {
     private final UserRepository userRepository;
     private final UptimeService uptimeService;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final PublicStatusPageCache publicCache;
 
     @Transactional
     public StatusPageResponse create(String email, StatusPageRequest request) {
@@ -85,6 +86,7 @@ public class StatusPageService {
             throw new IllegalArgumentException("That URL is already taken");
         }
 
+        String previousSlug = page.getSlug();
         page.setSlug(request.getSlug());
         page.setTitle(request.getTitle());
         page.setDescription(request.getDescription());
@@ -96,6 +98,8 @@ public class StatusPageService {
             page.setPasswordHash(hashOrNull(request.getPassword()));
         }
 
+        publicCache.invalidate(previousSlug);
+        publicCache.invalidate(page.getSlug());
         return toResponse(page);
     }
 
@@ -109,13 +113,15 @@ public class StatusPageService {
             throw StatusPagePasswordException.incorrect();
         }
 
-        return buildPublicResponse(page);
+        return publicCache.getOrCompute(slug, () -> buildPublicResponse(page));
     }
 
     @Transactional
     public void delete(String email, UUID pageId) {
         User user = requireUser(email);
-        statusPageRepository.delete(ownedPage(user.getId(), pageId));
+        StatusPage page = ownedPage(user.getId(), pageId);
+        statusPageRepository.delete(page);
+        publicCache.invalidate(page.getSlug());
     }
 
     @Transactional(readOnly = true)
@@ -145,7 +151,7 @@ public class StatusPageService {
             throw StatusPagePasswordException.required();
         }
 
-        return buildPublicResponse(page);
+        return publicCache.getOrCompute(slug, () -> buildPublicResponse(page));
     }
 
     // ---- Private helpers ----
