@@ -10,6 +10,8 @@ import com.heartbeat.ping.repository.AlertChannelRepository;
 import com.heartbeat.ping.repository.MonitorRepository;
 import com.heartbeat.ping.repository.UserRepository;
 import com.heartbeat.ping.service.ResourceNotFoundException;
+import com.heartbeat.ping.service.security.RateLimitExceededException;
+import com.heartbeat.ping.service.security.RateLimiter;
 import com.heartbeat.ping.service.security.UrlSafetyValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +19,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -41,6 +44,7 @@ public class AlertChannelService {
     private final UrlSafetyValidator urlSafetyValidator;
     private final WebhookDeliveryService webhookDeliveryService;
     private final WebhookPayloadBuilder webhookPayloadBuilder;
+    private final RateLimiter rateLimiter;
 
     @Transactional
     public AlertChannelResponse create(UUID userId, AlertChannelRequest request) {
@@ -107,9 +111,18 @@ public class AlertChannelService {
         monitor.setAlertChannels(channels);
     }
 
-    /** Sends a synchronous test message. Returns false (with a message) rather than throwing on delivery failure. */
+    /**
+     * Sends a synchronous test message. Returns false (with a message) rather than throwing on
+     * delivery failure. Rate-limited per user — this makes a real outbound request to a
+     * user-supplied URL, so without a cap it doubles as a free relay for spamming or probing
+     * third-party endpoints at unlimited rate.
+     */
     @Transactional(readOnly = true)
     public AlertChannelTestResult test(UUID channelId, UUID userId) {
+        if (!rateLimiter.allow("alert-channel-test:" + userId, 20, Duration.ofMinutes(15))) {
+            throw new RateLimitExceededException("Too many test sends. Please try again later.");
+        }
+
         AlertChannel channel = channelRepository.findByIdAndUser_Id(channelId, userId)
                 .orElseThrow(() -> new AccessDeniedException("Alert channel not found for this user"));
 

@@ -48,7 +48,7 @@ class StatusPageServiceTest {
     @BeforeEach
     void setUp() {
         service = new StatusPageService(statusPageRepository, monitorRepository, monitorStatusRepository,
-                userRepository, uptimeService, passwordEncoder);
+                userRepository, uptimeService, passwordEncoder, new PublicStatusPageCache());
         owner = User.builder().userName("jane").email("jane@example.com").build();
         owner.setId(UUID.randomUUID());
     }
