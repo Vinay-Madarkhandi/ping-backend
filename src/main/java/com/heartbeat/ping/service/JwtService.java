@@ -6,6 +6,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,10 @@ import java.util.function.Function;
 @Service
 @RequiredArgsConstructor
 public class JwtService {
+
+    /** HS256 requires a key of at least 256 bits (32 bytes); {@link Keys#hmacShaKeyFor} rejects anything shorter. */
+    private static final int MIN_SECRET_BYTES = 32;
+
     @Value("${jwt.expiry}")
     private long expiry;
 
@@ -28,6 +33,26 @@ public class JwtService {
     private String SECRET_KEY;
 
     private final RevokedTokenRepository revokedTokenRepository;
+
+    /**
+     * Fails application startup with a clear message when {@code jwt.secret} is missing or too
+     * weak, instead of letting every deployment discover it the hard way on the first sign-in —
+     * an empty/blank secret would otherwise only surface as a cryptic {@code WeakKeyException}
+     * deep inside the first {@link #generateToken} or {@link #createToken} call in production.
+     */
+    @PostConstruct
+    void validateSecret() {
+        if (SECRET_KEY == null || SECRET_KEY.isBlank()) {
+            throw new IllegalStateException(
+                    "jwt.secret is not set. Configure the JWT_SECRET environment variable before starting the app.");
+        }
+        int actualBytes = SECRET_KEY.getBytes(StandardCharsets.UTF_8).length;
+        if (actualBytes < MIN_SECRET_BYTES) {
+            throw new IllegalStateException(
+                    "jwt.secret is too short for HS256 (" + actualBytes + " bytes; needs at least "
+                            + MIN_SECRET_BYTES + "). Configure a longer JWT_SECRET.");
+        }
+    }
 
     public String generateToken(Map<String, Object> payload, String email) {
             return Jwts.builder()
